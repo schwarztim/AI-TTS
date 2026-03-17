@@ -481,7 +481,7 @@ def install_claude():
         event_hooks.append({"matcher": "", "hooks": [{"type": "command", "command": cmd}]})
 
     _ensure_hook("Stop", notify_cmd)
-    _ensure_hook("PreToolUse", notify_cmd)
+    # notify only on Stop — not PreToolUse, to avoid speaking during intermediate steps
     _ensure_hook("UserPromptSubmit", status_cmd)
     _ensure_hook("PreToolUse", status_cmd)
     _ensure_hook("Stop", status_cmd)
