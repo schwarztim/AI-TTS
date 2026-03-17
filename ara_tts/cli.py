@@ -1,4 +1,4 @@
-"""ara-tts CLI — manage the local Kokoro TTS server and integrations."""
+"""ara-tts CLI — manage the local TTS server and integrations."""
 
 import json
 import os
@@ -107,7 +107,7 @@ def _integration_path(rel: str) -> Path:
 
 @click.group()
 def main():
-    """ara-tts — Local Kokoro TTS server with Claude Code, OpenCode, and Copilot integrations."""
+    """ara-tts — Local neural TTS server with Claude Code, OpenCode, and Copilot integrations."""
     pass
 
 

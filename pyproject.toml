@@ -5,11 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "ara-tts"
 version = "0.1.0"
-description = "Local Kokoro TTS server with hooks for Claude Code, OpenCode, and GitHub Copilot CLI"
+description = "Local neural TTS server with hooks for Claude Code, OpenCode, and GitHub Copilot CLI"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 license = { text = "MIT" }
-keywords = ["tts", "text-to-speech", "kokoro", "claude", "ai", "voice"]
+keywords = ["tts", "text-to-speech", "claude", "ai", "voice"]
 dependencies = [
   "fastapi>=0.115.0",
   "uvicorn[standard]>=0.34.0",

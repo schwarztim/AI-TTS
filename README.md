@@ -1,8 +1,8 @@
 # ara-tts
 
-A standalone, pip-installable local TTS server powered by [Kokoro](https://github.com/hexgrad/kokoro) with ready-made integrations for Claude Code, OpenCode, and GitHub Copilot CLI.
+A standalone, pip-installable local TTS server with ready-made integrations for Claude Code, OpenCode, and GitHub Copilot CLI.
 
-Speaks assistant responses aloud in real time using a fast, on-device neural TTS model (no cloud, no API keys).
+Speaks assistant responses aloud in real time using a fast, on-device neural TTS model — no cloud, no API keys.
 
 ---
 

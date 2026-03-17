@@ -10,7 +10,7 @@ from ara_tts.tts_engine import TTSEngine
 
 logger = logging.getLogger(__name__)
 
-# All available TTS voices (Kokoro)
+# All available TTS voices
 VOICES = [
     # American female
     "af_heart", "af_bella", "af_nicole", "af_sarah", "af_sky",

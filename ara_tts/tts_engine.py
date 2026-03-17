@@ -33,7 +33,7 @@ class TTSEngine:
     def generate_stream(self, text: str):
         """Yield processed audio chunks as they're generated.
 
-        Splits text into sentences first so KPipeline processes each
+        Splits text into sentences first so the TTS pipeline processes each
         independently — first sentence yields without waiting for full text.
         """
         try:
