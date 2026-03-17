@@ -612,26 +612,60 @@ def _install_copilot_unix():
         click.echo(f"Source not found: {src}", err=True)
         sys.exit(1)
 
-    snippet = src.read_text()
-    marker = "# cortana-tts copilot wrapper"
-    full_snippet = f"\n{marker}\n{snippet}\n"
+    # Write snippet to a dedicated file so it never ends up after an early
+    # `return` or inside a conditional block in ~/.zshrc / ~/.bashrc.
+    dest = _config_dir() / "copilot.sh"
+    dest.write_text(src.read_text())
+    dest.chmod(0o755)
+
+    source_line = f'source "{dest}"'
+    old_marker = "# cortana-tts copilot wrapper"
+    rc_comment = "# cortana-tts copilot integration"
 
     installed_in = []
     for rc in [Path.home() / ".zshrc", Path.home() / ".bashrc"]:
-        if rc.exists():
-            existing = rc.read_text()
-            if marker in existing:
-                click.echo(f"Already installed in {rc}")
-                continue
-            with open(rc, "a") as f:
-                f.write(full_snippet)
+        if not rc.exists():
+            continue
+        existing = rc.read_text()
+
+        # Already using the new source-file approach
+        if str(dest) in existing:
+            click.echo(f"Already installed in {rc}")
+            continue
+
+        # Migrate from old inline-snippet approach: replace block with source line
+        if old_marker in existing:
+            lines = existing.splitlines(keepends=True)
+            new_lines = []
+            skip = False
+            replaced = False
+            for line in lines:
+                if old_marker in line:
+                    skip = True
+                    if not replaced:
+                        new_lines.append(f"\n{rc_comment}\n{source_line}\n")
+                        replaced = True
+                    continue
+                if skip:
+                    if line.strip() == "":
+                        skip = False
+                    continue
+                new_lines.append(line)
+            rc.write_text("".join(new_lines))
+            click.echo(f"Migrated {rc} (replaced inline snippet with source line)")
             installed_in.append(str(rc))
-            click.echo(f"Appended to {rc}")
+            continue
+
+        with open(rc, "a") as f:
+            f.write(f"\n{rc_comment}\n{source_line}\n")
+        installed_in.append(str(rc))
+        click.echo(f"Appended source line to {rc}")
 
     if not installed_in:
-        click.echo("No .zshrc or .bashrc found. Snippet:")
-        click.echo(full_snippet)
+        click.echo("No .zshrc or .bashrc found.")
+        click.echo(f"Add this line manually:\n  {source_line}")
     else:
+        click.echo(f"Snippet written to: {dest}")
         click.echo("Reload your shell or run: source ~/.zshrc")
 
 
@@ -641,8 +675,11 @@ def _install_copilot_windows():
         click.echo(f"Source not found: {src}", err=True)
         sys.exit(1)
 
-    snippet = src.read_text()
-    marker = "# cortana-tts copilot wrapper"
+    dest = _config_dir() / "copilot.ps1"
+    dest.write_text(src.read_text())
+
+    dot_source = f'. "{dest}"'
+    old_marker = "# cortana-tts copilot wrapper"
 
     profile_path_raw = subprocess.run(
         ["powershell", "-Command", "$PROFILE"],
@@ -652,13 +689,35 @@ def _install_copilot_windows():
     profile.parent.mkdir(parents=True, exist_ok=True)
 
     existing = profile.read_text() if profile.exists() else ""
-    if marker in existing:
+    if str(dest) in existing:
         click.echo(f"Already installed in {profile}")
         return
 
+    if old_marker in existing:
+        # Migrate from inline snippet
+        lines = existing.splitlines(keepends=True)
+        new_lines = []
+        skip = False
+        replaced = False
+        for line in lines:
+            if old_marker in line:
+                skip = True
+                if not replaced:
+                    new_lines.append(f"\n# cortana-tts copilot integration\n{dot_source}\n")
+                    replaced = True
+                continue
+            if skip:
+                if line.strip() == "":
+                    skip = False
+                continue
+            new_lines.append(line)
+        profile.write_text("".join(new_lines))
+        click.echo(f"Migrated {profile}")
+        return
+
     with open(profile, "a") as f:
-        f.write(f"\n{marker}\n{snippet}\n")
-    click.echo(f"Appended to {profile}")
+        f.write(f"\n# cortana-tts copilot integration\n{dot_source}\n")
+    click.echo(f"Appended dot-source to {profile}")
     click.echo("Reload PowerShell to activate.")
 
 
@@ -742,7 +801,9 @@ def uninstall_opencode():
 @cmd_uninstall.command("copilot")
 def uninstall_copilot():
     """Remove gh copilot TTS wrapper from shell config."""
-    marker = "# cortana-tts copilot wrapper"
+    copilot_file = _config_dir() / "copilot.sh"
+    old_marker = "# cortana-tts copilot wrapper"
+    new_marker = "# cortana-tts copilot integration"
 
     if platform.system() == "Windows":
         profile_path_raw = subprocess.run(
@@ -750,29 +811,38 @@ def uninstall_copilot():
             capture_output=True, text=True
         ).stdout.strip()
         rc_files = [Path(profile_path_raw)] if profile_path_raw else []
+        copilot_file = _config_dir() / "copilot.ps1"
     else:
         rc_files = [Path.home() / ".zshrc", Path.home() / ".bashrc"]
 
     for rc in rc_files:
         if not rc.exists():
             continue
-        lines = rc.read_text().splitlines(keepends=True)
-        # Find marker line and remove from there to next blank line after block
+        original = rc.read_text()
+        lines = original.splitlines(keepends=True)
         new_lines = []
         skip = False
         for line in lines:
-            if marker in line:
+            # Match both old inline marker and new source-line comment
+            if old_marker in line or new_marker in line or str(copilot_file) in line:
                 skip = True
+                continue
+            if skip and line.strip() == "":
+                skip = False
+                continue
             if not skip:
                 new_lines.append(line)
-            elif line.strip() == "" and skip:
-                # End of block
-                skip = False
-        if len(new_lines) != len(lines):
-            rc.write_text("".join(new_lines))
-            click.echo(f"Removed wrapper from {rc}")
+        result = "".join(new_lines)
+        if result != original:
+            rc.write_text(result)
+            click.echo(f"Removed from {rc}")
         else:
-            click.echo(f"Wrapper not found in {rc}")
+            click.echo(f"Not found in {rc}")
+
+    # Remove the dedicated snippet file
+    if copilot_file.exists():
+        copilot_file.unlink()
+        click.echo(f"Deleted {copilot_file}")
 
 
 # ---------------------------------------------------------------------------
