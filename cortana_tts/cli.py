@@ -1,4 +1,4 @@
-"""ara-tts CLI — manage the local TTS server and integrations."""
+"""cortana-tts CLI — manage the local TTS server and integrations."""
 
 import json
 import os
@@ -18,7 +18,7 @@ import requests
 # Helpers
 # ---------------------------------------------------------------------------
 
-ARA_TTS_URL_DEFAULT = "http://127.0.0.1:5111"
+CORTANA_TTS_URL_DEFAULT = "http://127.0.0.1:5111"
 
 VOICES = [
     # American female
@@ -34,25 +34,25 @@ VOICES = [
 
 
 def _server_url() -> str:
-    return os.environ.get("ARA_TTS_SERVER", ARA_TTS_URL_DEFAULT)
+    return os.environ.get("CORTANA_TTS_SERVER", CORTANA_TTS_URL_DEFAULT)
 
 
 def _pid_file() -> Path:
     if platform.system() == "Windows":
         base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-        return base / "ara-tts" / "server.pid"
+        return base / "cortana-tts" / "server.pid"
     else:
         base = Path(os.environ.get("XDG_STATE_HOME", Path.home() / ".local" / "state"))
-        return base / "ara-tts" / "server.pid"
+        return base / "cortana-tts" / "server.pid"
 
 
 def _config_dir() -> Path:
     if platform.system() == "Windows":
         base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
-        return base / "ara-tts"
+        return base / "cortana-tts"
     else:
         base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
-        return base / "ara-tts"
+        return base / "cortana-tts"
 
 
 def _hooks_dir() -> Path:
@@ -93,7 +93,7 @@ def _kill_pid(pid: int):
 # ---------------------------------------------------------------------------
 
 def _package_root() -> Path:
-    """Return the root of the installed ara-tts package (parent of ara_tts/)."""
+    """Return the root of the installed cortana-tts package (parent of cortana_tts/)."""
     return Path(__file__).resolve().parent.parent
 
 
@@ -107,7 +107,7 @@ def _integration_path(rel: str) -> Path:
 
 @click.group()
 def main():
-    """ara-tts — Local neural TTS server with Claude Code, OpenCode, and Copilot integrations."""
+    """cortana-tts — Local neural TTS server with Claude Code, OpenCode, and Copilot integrations."""
     pass
 
 
@@ -120,9 +120,9 @@ def main():
 @click.option("--voice", default="af_heart", show_default=True, help="Voice to use.")
 @click.option("--bg", is_flag=True, default=False, help="Start server in background.")
 def cmd_start(port: int, voice: str, bg: bool):
-    """Start the ara-tts server."""
+    """Start the cortana-tts server."""
     if _is_running():
-        click.echo("ara-tts server is already running.")
+        click.echo("cortana-tts server is already running.")
         return
 
     env = os.environ.copy()
@@ -139,14 +139,14 @@ def cmd_start(port: int, voice: str, bg: bool):
 
         with open(log_path, "a") as log_f:
             proc = subprocess.Popen(
-                [sys.executable, "-m", "ara_tts.server"],
+                [sys.executable, "-m", "cortana_tts.server"],
                 env=env,
                 stdout=log_f,
                 stderr=log_f,
                 start_new_session=True,
             )
         pid_path.write_text(str(proc.pid))
-        click.echo(f"ara-tts server started in background (PID {proc.pid}, port {port})")
+        click.echo(f"cortana-tts server started in background (PID {proc.pid}, port {port})")
         click.echo(f"Log: {log_path}")
 
         # Wait briefly to confirm startup
@@ -157,13 +157,13 @@ def cmd_start(port: int, voice: str, bg: bool):
                 return
         click.echo("Warning: server did not respond to /health within 5s. Check the log.")
     else:
-        click.echo(f"Starting ara-tts server on port {port} (voice: {voice})...")
-        subprocess.run([sys.executable, "-m", "ara_tts.server"], env=env)
+        click.echo(f"Starting cortana-tts server on port {port} (voice: {voice})...")
+        subprocess.run([sys.executable, "-m", "cortana_tts.server"], env=env)
 
 
 @main.command("stop")
 def cmd_stop():
-    """Stop the background ara-tts server."""
+    """Stop the background cortana-tts server."""
     pid = _read_pid()
     if pid:
         _kill_pid(pid)
@@ -181,7 +181,7 @@ def cmd_stop():
 @main.command("restart")
 @click.pass_context
 def cmd_restart(ctx):
-    """Restart the background ara-tts server."""
+    """Restart the background cortana-tts server."""
     ctx.invoke(cmd_stop)
     time.sleep(1)
     ctx.invoke(cmd_start, port=5111, voice="af_heart", bg=True)
@@ -232,7 +232,7 @@ def voice_list():
 def voice_set(name: str):
     """Switch the active voice."""
     if name not in VOICES:
-        click.echo(f"Unknown voice: {name}. Run 'ara-tts voice list' to see options.", err=True)
+        click.echo(f"Unknown voice: {name}. Run 'cortana-tts voice list' to see options.", err=True)
         sys.exit(1)
     try:
         r = requests.post(
@@ -357,7 +357,7 @@ def install_opencode():
 
     plugins_dir = Path.home() / ".config" / "opencode" / "plugins"
     plugins_dir.mkdir(parents=True, exist_ok=True)
-    dst = plugins_dir / "ara-tts.ts"
+    dst = plugins_dir / "cortana-tts.ts"
     shutil.copy2(src, dst)
     click.echo(f"Installed plugin: {dst}")
 
@@ -370,7 +370,7 @@ def install_opencode():
         except json.JSONDecodeError:
             click.echo("Warning: opencode.json is invalid JSON — overwriting.", err=True)
 
-    plugin_ref = "~/.config/opencode/plugins/ara-tts.ts"
+    plugin_ref = "~/.config/opencode/plugins/cortana-tts.ts"
     plugins = config.setdefault("plugins", [])
     if plugin_ref not in plugins:
         plugins.append(plugin_ref)
@@ -398,7 +398,7 @@ def _install_copilot_unix():
         sys.exit(1)
 
     snippet = src.read_text()
-    marker = "# ara-tts copilot wrapper"
+    marker = "# cortana-tts copilot wrapper"
     full_snippet = f"\n{marker}\n{snippet}\n"
 
     installed_in = []
@@ -427,7 +427,7 @@ def _install_copilot_windows():
         sys.exit(1)
 
     snippet = src.read_text()
-    marker = "# ara-tts copilot wrapper"
+    marker = "# cortana-tts copilot wrapper"
 
     profile_path_raw = subprocess.run(
         ["powershell", "-Command", "$PROFILE"],
@@ -499,13 +499,13 @@ def uninstall_claude():
         settings_path.write_text(json.dumps(settings, indent=2))
         click.echo(f"Removed hooks from {settings_path}")
     else:
-        click.echo("No ara-tts hooks found in settings.json.")
+        click.echo("No cortana-tts hooks found in settings.json.")
 
 
 @cmd_uninstall.command("opencode")
 def uninstall_opencode():
     """Remove OpenCode plugin."""
-    dst = Path.home() / ".config" / "opencode" / "plugins" / "ara-tts.ts"
+    dst = Path.home() / ".config" / "opencode" / "plugins" / "cortana-tts.ts"
     if dst.exists():
         dst.unlink()
         click.echo(f"Removed: {dst}")
@@ -516,7 +516,7 @@ def uninstall_opencode():
             config = json.loads(oc_config.read_text())
         except json.JSONDecodeError:
             return
-        plugin_ref = "~/.config/opencode/plugins/ara-tts.ts"
+        plugin_ref = "~/.config/opencode/plugins/cortana-tts.ts"
         plugins = config.get("plugins", [])
         if plugin_ref in plugins:
             plugins.remove(plugin_ref)
@@ -527,7 +527,7 @@ def uninstall_opencode():
 @cmd_uninstall.command("copilot")
 def uninstall_copilot():
     """Remove gh copilot TTS wrapper from shell config."""
-    marker = "# ara-tts copilot wrapper"
+    marker = "# cortana-tts copilot wrapper"
 
     if platform.system() == "Windows":
         profile_path_raw = subprocess.run(

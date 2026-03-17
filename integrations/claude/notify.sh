@@ -1,24 +1,24 @@
 #!/usr/bin/env bash
-# integrations/claude/notify.sh — ara-tts hook for Claude Code
+# integrations/claude/notify.sh — cortana-tts hook for Claude Code
 # Extracts <tts> tag from Claude's response and sends to TTS server.
 # Handles: Stop, Notification, PermissionRequest, PreToolUse (immediate mode)
 #
-# Install via: ara-tts install claude
-# Or manually set ARA_TTS_SERVER env var to override the server URL.
+# Install via: cortana-tts install claude
+# Or manually set CORTANA_TTS_SERVER env var to override the server URL.
 
 set -euo pipefail
 
-ARA_TTS_SERVER="${ARA_TTS_SERVER:-http://127.0.0.1:5111}"
+CORTANA_TTS_SERVER="${CORTANA_TTS_SERVER:-http://127.0.0.1:5111}"
 if [ -d "$HOME/Library/Logs" ]; then
-    LOGFILE="$HOME/Library/Logs/ara-tts-hook.log"
+    LOGFILE="$HOME/Library/Logs/cortana-tts-hook.log"
 else
-    LOGFILE="${XDG_STATE_HOME:-$HOME/.local/state}/ara-tts-hook.log"
+    LOGFILE="${XDG_STATE_HOME:-$HOME/.local/state}/cortana-tts-hook.log"
 fi
-TTS_TIMING_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/ara-tts/tts_timing"
-ARA_TTS_RUNTIME="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/ara-tts-$(id -u)"
-mkdir -p "$ARA_TTS_RUNTIME"
-TTS_PLAYED_FLAG="$ARA_TTS_RUNTIME/tts_played"
-TTS_LAST_HASH="$ARA_TTS_RUNTIME/tts_last_hash"
+TTS_TIMING_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/cortana-tts/tts_timing"
+CORTANA_TTS_RUNTIME="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/cortana-tts-$(id -u)"
+mkdir -p "$CORTANA_TTS_RUNTIME"
+TTS_PLAYED_FLAG="$CORTANA_TTS_RUNTIME/tts_played"
+TTS_LAST_HASH="$CORTANA_TTS_RUNTIME/tts_last_hash"
 
 # Portable md5 (macOS: md5, Linux: md5sum)
 md5_hash() { command -v md5 >/dev/null 2>&1 && md5 -q || md5sum | cut -d' ' -f1; }
@@ -27,7 +27,7 @@ INPUT=$(cat)
 
 HOOK_EVENT=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('hook_event_name','unknown'))" 2>/dev/null || echo "unknown")
 
-echo "$(date +%H:%M:%S.%3N): [ara-tts] hook entry event=$HOOK_EVENT" >> "$LOGFILE"
+echo "$(date +%H:%M:%S.%3N): [cortana-tts] hook entry event=$HOOK_EVENT" >> "$LOGFILE"
 
 # Read TTS timing mode
 TTS_TIMING="on-complete"
@@ -114,8 +114,8 @@ fire_tts() {
             mood_json=", \"mood\": \"${mood}\""
         fi
     fi
-    echo "$(date +%H:%M:%S.%3N): [ara-tts] hook→server POST /speak" >> "$LOGFILE"
-    curl -s -X POST "$ARA_TTS_SERVER/speak" \
+    echo "$(date +%H:%M:%S.%3N): [cortana-tts] hook→server POST /speak" >> "$LOGFILE"
+    curl -s -X POST "$CORTANA_TTS_SERVER/speak" \
         -H "Content-Type: application/json" \
         -d "{\"text\": $(echo "$tts_text" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')$mood_json}" \
         --connect-timeout 2 \
@@ -218,7 +218,7 @@ echo "$(date): tts_text=${TTS_TEXT:0:80}..." >> "$LOGFILE"
 
 if [ -z "$TTS_TEXT" ]; then
     echo "$(date): No <tts> tag found, playing random alert" >> "$LOGFILE"
-    curl -s -X POST "$ARA_TTS_SERVER/alert" \
+    curl -s -X POST "$CORTANA_TTS_SERVER/alert" \
         --connect-timeout 2 \
         --max-time 10 \
         >> "$LOGFILE" 2>&1 &

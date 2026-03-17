@@ -1,21 +1,21 @@
 # integrations/claude/status.ps1 — Send overlay state updates on hook events (Windows)
 # Used by: UserPromptSubmit, PreToolUse, SubagentStart, Stop
 #
-# Install via: ara-tts install claude
+# Install via: cortana-tts install claude
 
 param()
 
 $ErrorActionPreference = "SilentlyContinue"
 
-$ARA_TTS_SERVER = if ($env:ARA_TTS_SERVER) { $env:ARA_TTS_SERVER } else { "http://127.0.0.1:5111" }
-$LogDir = "$env:LOCALAPPDATA\ara-tts\logs"
+$CORTANA_TTS_SERVER = if ($env:CORTANA_TTS_SERVER) { $env:CORTANA_TTS_SERVER } else { "http://127.0.0.1:5111" }
+$LogDir = "$env:LOCALAPPDATA\cortana-tts\logs"
 $null = New-Item -ItemType Directory -Force -Path $LogDir
-$LOGFILE = "$LogDir\ara-tts-hook.log"
+$LOGFILE = "$LogDir\cortana-tts-hook.log"
 
 function Write-Log {
     param([string]$Message)
     $ts = Get-Date -Format "HH:mm:ss.fff"
-    Add-Content -Path $LOGFILE -Value "$ts [ara-tts] $Message"
+    Add-Content -Path $LOGFILE -Value "$ts [cortana-tts] $Message"
 }
 
 function Post-Status {
@@ -23,12 +23,12 @@ function Post-Status {
     Start-Job -ScriptBlock {
         param($Url, $Json)
         Invoke-RestMethod -Uri "$Url/status" -Method Post -Body $Json -ContentType "application/json" -TimeoutSec 2
-    } -ArgumentList $ARA_TTS_SERVER, $Json | Out-Null
+    } -ArgumentList $CORTANA_TTS_SERVER, $Json | Out-Null
 }
 
 function Test-ServerRunning {
     try {
-        $r = Invoke-RestMethod -Uri "$ARA_TTS_SERVER/health" -TimeoutSec 1
+        $r = Invoke-RestMethod -Uri "$CORTANA_TTS_SERVER/health" -TimeoutSec 1
         return $true
     } catch {
         return $false
@@ -48,22 +48,22 @@ switch ($HOOK_EVENT) {
     "UserPromptSubmit" {
         # Auto-start TTS server if not running
         if (-not (Test-ServerRunning)) {
-            $araTts = Get-Command ara-tts -ErrorAction SilentlyContinue
+            $araTts = Get-Command cortana-tts -ErrorAction SilentlyContinue
             if ($araTts) {
                 Start-Process -FilePath $araTts.Source -ArgumentList "start --bg" -WindowStyle Hidden
-                Write-Log "auto-starting server via ara-tts start --bg"
+                Write-Log "auto-starting server via cortana-tts start --bg"
                 Start-Sleep -Seconds 2
             } else {
-                Write-Log "ara-tts not found in PATH, cannot auto-start"
+                Write-Log "cortana-tts not found in PATH, cannot auto-start"
             }
         }
 
         # Clear TTS played flag
-        $RuntimeDir = "$env:TEMP\ara-tts-$([System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value)"
+        $RuntimeDir = "$env:TEMP\cortana-tts-$([System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value)"
         Remove-Item -Path "$RuntimeDir\tts_played" -Force -ErrorAction SilentlyContinue
 
         # Inject TTS verbosity mode
-        $ConfigDir = "$env:APPDATA\ara-tts"
+        $ConfigDir = "$env:APPDATA\cortana-tts"
         $TTS_MODE_FILE = "$ConfigDir\tts_mode"
         if (Test-Path $TTS_MODE_FILE) {
             $mode = (Get-Content $TTS_MODE_FILE -Raw).Trim()

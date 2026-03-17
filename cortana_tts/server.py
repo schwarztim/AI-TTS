@@ -4,7 +4,7 @@ import os
 import time
 
 logger = logging.getLogger(__name__)
-perf_logger = logging.getLogger("ara_tts.perf")
+perf_logger = logging.getLogger("cortana_tts.perf")
 from contextlib import asynccontextmanager
 from enum import Enum
 from pathlib import Path
@@ -15,10 +15,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from ara_tts.tts_engine import TTSEngine
-from ara_tts.audio_player import AudioPlayer
-from ara_tts.pipeline import SpeakPipeline
-from ara_tts.alert_cache import AlertCache, SAMPLE_RATE
+from cortana_tts.tts_engine import TTSEngine
+from cortana_tts.audio_player import AudioPlayer
+from cortana_tts.pipeline import SpeakPipeline
+from cortana_tts.alert_cache import AlertCache, SAMPLE_RATE
 
 
 class SpeakRequest(BaseModel):
@@ -92,11 +92,11 @@ audio_broadcaster = StatusBroadcaster()
 
 
 def _get_env_path() -> Path:
-    """Resolve .env path: ARA_TTS_CONFIG env var → ~/.config/ara-tts/.env"""
-    env_override = os.environ.get("ARA_TTS_CONFIG")
+    """Resolve .env path: CORTANA_TTS_CONFIG env var → ~/.config/cortana-tts/.env"""
+    env_override = os.environ.get("CORTANA_TTS_CONFIG")
     if env_override:
         return Path(env_override)
-    return Path.home() / ".config" / "ara-tts" / ".env"
+    return Path.home() / ".config" / "cortana-tts" / ".env"
 
 
 def create_pipeline() -> tuple[SpeakPipeline, AlertCache]:
@@ -107,7 +107,7 @@ def create_pipeline() -> tuple[SpeakPipeline, AlertCache]:
     engine = TTSEngine(voice=voice, speed=speed)
     player = AudioPlayer()
     pipeline = SpeakPipeline(tts_engine=engine, audio_player=player, broadcaster=broadcaster)
-    cache_dir = Path(os.getenv("ALERT_CACHE_DIR", Path.home() / ".config" / "ara-tts" / "alert_cache"))
+    cache_dir = Path(os.getenv("ALERT_CACHE_DIR", Path.home() / ".config" / "cortana-tts" / "alert_cache"))
     alert_cache = AlertCache(cache_dir=cache_dir, tts_engine=engine)
     return pipeline, alert_cache
 
@@ -115,7 +115,7 @@ def create_pipeline() -> tuple[SpeakPipeline, AlertCache]:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     import asyncio
-    from ara_tts.pipeline import set_main_loop
+    from cortana_tts.pipeline import set_main_loop
     set_main_loop(asyncio.get_running_loop())
     app.state.start_time = time.time()
     pipeline, alert_cache = create_pipeline()
@@ -150,7 +150,7 @@ def _should_play_cue(app) -> bool:
 
 
 def create_app(custom_lifespan=None) -> FastAPI:
-    app = FastAPI(title="ara-tts", lifespan=custom_lifespan or lifespan)
+    app = FastAPI(title="cortana-tts", lifespan=custom_lifespan or lifespan)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["*"],
@@ -298,12 +298,12 @@ app = create_app()
 def main():
     import uvicorn
     load_dotenv(_get_env_path())
-    perf_log = logging.getLogger("ara_tts.perf")
+    perf_log = logging.getLogger("cortana_tts.perf")
     perf_log.setLevel(logging.INFO)
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter("%(asctime)s [PERF] %(message)s", datefmt="%H:%M:%S"))
     perf_log.addHandler(handler)
-    port = int(os.getenv("TTS_PORT", os.getenv("ARA_TTS_PORT", "5111")))
+    port = int(os.getenv("TTS_PORT", os.getenv("CORTANA_TTS_PORT", "5111")))
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
 
 

@@ -1,4 +1,4 @@
-# ara-tts
+# cortana-tts
 
 A standalone, pip-installable local TTS server with ready-made integrations for Claude Code, OpenCode, and GitHub Copilot CLI.
 
@@ -9,7 +9,7 @@ Speaks assistant responses aloud in real time using a fast, on-device neural TTS
 ## Install
 
 ```bash
-pip install ara-tts
+pip install cortana-tts
 ```
 
 **Linux** also requires PortAudio:
@@ -26,19 +26,19 @@ sudo apt install libportaudio2
 
 ```bash
 # Start the server (foreground)
-ara-tts start
+cortana-tts start
 
 # Start in background
-ara-tts start --bg
+cortana-tts start --bg
 
 # Test speech
-ara-tts speak "Hello. The server is running."
+cortana-tts speak "Hello. The server is running."
 
 # Check status
-ara-tts status
+cortana-tts status
 
 # Stop background server
-ara-tts stop
+cortana-tts stop
 ```
 
 The server listens on `http://127.0.0.1:5111` by default.
@@ -49,10 +49,10 @@ The server listens on `http://127.0.0.1:5111` by default.
 
 ### Claude Code
 
-Installs `notify.sh` (or `.ps1` on Windows) and `status.sh` into `~/.config/ara-tts/hooks/`, then registers them as Claude Code hooks in `~/.claude/settings.json`.
+Installs `notify.sh` (or `.ps1` on Windows) and `status.sh` into `~/.config/cortana-tts/hooks/`, then registers them as Claude Code hooks in `~/.claude/settings.json`.
 
 ```bash
-ara-tts install claude
+cortana-tts install claude
 ```
 
 Claude Code must be restarted to pick up the new hooks. After that, every response containing a `<!-- <tts>...</tts> -->` tag will be spoken aloud automatically.
@@ -60,21 +60,21 @@ Claude Code must be restarted to pick up the new hooks. After that, every respon
 **Uninstall:**
 
 ```bash
-ara-tts uninstall claude
+cortana-tts uninstall claude
 ```
 
 ### OpenCode
 
-Copies `integrations/opencode/index.ts` to `~/.config/opencode/plugins/ara-tts.ts` and registers it in `~/.config/opencode/opencode.json`.
+Copies `integrations/opencode/index.ts` to `~/.config/opencode/plugins/cortana-tts.ts` and registers it in `~/.config/opencode/opencode.json`.
 
 ```bash
-ara-tts install opencode
+cortana-tts install opencode
 ```
 
 **Uninstall:**
 
 ```bash
-ara-tts uninstall opencode
+cortana-tts uninstall opencode
 ```
 
 ### GitHub Copilot CLI
@@ -82,14 +82,14 @@ ara-tts uninstall opencode
 Appends a shell function to `~/.zshrc` and `~/.bashrc` (or PowerShell profile on Windows) that wraps `gh copilot` and speaks the response.
 
 ```bash
-ara-tts install copilot
+cortana-tts install copilot
 source ~/.zshrc   # or restart your shell
 ```
 
 **Uninstall:**
 
 ```bash
-ara-tts uninstall copilot
+cortana-tts uninstall copilot
 ```
 
 ---
@@ -99,8 +99,8 @@ ara-tts uninstall copilot
 22 voices are available. Switch at any time — the new voice takes effect immediately.
 
 ```bash
-ara-tts voice list
-ara-tts voice set af_heart
+cortana-tts voice list
+cortana-tts voice set af_heart
 ```
 
 | Category | Voices |
@@ -114,12 +114,12 @@ ara-tts voice set af_heart
 
 ## Configuration
 
-Config is read from `~/.config/ara-tts/.env` (or the path in `$ARA_TTS_CONFIG`).
+Config is read from `~/.config/cortana-tts/.env` (or the path in `$CORTANA_TTS_CONFIG`).
 
 Copy the example and edit:
 
 ```bash
-cp .env.example ~/.config/ara-tts/.env
+cp .env.example ~/.config/cortana-tts/.env
 ```
 
 Key settings:
@@ -129,8 +129,8 @@ Key settings:
 | `TTS_VOICE` | `af_heart` | Active voice |
 | `TTS_PORT` | `5111` | Server port |
 | `TTS_SPEED` | `1.1` | Speech speed multiplier |
-| `ARA_TTS_SERVER` | `http://127.0.0.1:5111` | Server URL (for hook scripts) |
-| `ALERT_CACHE_DIR` | `~/.config/ara-tts/alert_cache` | Pre-generated audio cue cache |
+| `CORTANA_TTS_SERVER` | `http://127.0.0.1:5111` | Server URL (for hook scripts) |
+| `ALERT_CACHE_DIR` | `~/.config/cortana-tts/alert_cache` | Pre-generated audio cue cache |
 | `TTS_DEBUG_DUMP` | `0` | Set to `1` to save WAV files to `~/Desktop/tts_debug/` |
 
 ---
@@ -174,7 +174,7 @@ Valid moods: `error`, `success`, `warn`, `melancholy` (omit for default).
 
 **macOS:** PortAudio is bundled with sounddevice wheels. No extra steps needed.
 
-**Windows:** Requires Visual C++ Redistributable 2015–2022. Hook scripts use PowerShell (`.ps1`). The `ara-tts install claude` command automatically selects the correct scripts.
+**Windows:** Requires Visual C++ Redistributable 2015–2022. Hook scripts use PowerShell (`.ps1`). The `cortana-tts install claude` command automatically selects the correct scripts.
 
 ---
 
@@ -182,21 +182,21 @@ Valid moods: `error`, `success`, `warn`, `melancholy` (omit for default).
 
 | Platform | Path |
 |---|---|
-| Linux / macOS | `~/.local/state/ara-tts/server.pid` |
-| Windows | `%LOCALAPPDATA%\ara-tts\server.pid` |
+| Linux / macOS | `~/.local/state/cortana-tts/server.pid` |
+| Windows | `%LOCALAPPDATA%\cortana-tts\server.pid` |
 
 ---
 
 ## CLI reference
 
 ```
-ara-tts start [--port 5111] [--voice af_heart] [--bg]
-ara-tts stop
-ara-tts restart
-ara-tts status
-ara-tts voice list
-ara-tts voice set <name>
-ara-tts speak "<text>"
-ara-tts install claude|opencode|copilot
-ara-tts uninstall claude|opencode|copilot
+cortana-tts start [--port 5111] [--voice af_heart] [--bg]
+cortana-tts stop
+cortana-tts restart
+cortana-tts status
+cortana-tts voice list
+cortana-tts voice set <name>
+cortana-tts speak "<text>"
+cortana-tts install claude|opencode|copilot
+cortana-tts uninstall claude|opencode|copilot
 ```

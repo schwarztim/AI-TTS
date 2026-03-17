@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from ara_tts.tts_engine import TTSEngine
+from cortana_tts.tts_engine import TTSEngine
 
 logger = logging.getLogger(__name__)
 

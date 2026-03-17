@@ -1,22 +1,22 @@
-# integrations/claude/notify.ps1 — ara-tts hook for Claude Code (Windows)
+# integrations/claude/notify.ps1 — cortana-tts hook for Claude Code (Windows)
 # Extracts <tts> tag from Claude's response and sends to TTS server.
 # Handles: Stop, Notification, PermissionRequest, PreToolUse (immediate mode)
 #
-# Install via: ara-tts install claude
+# Install via: cortana-tts install claude
 
 param()
 
 $ErrorActionPreference = "SilentlyContinue"
 
-$ARA_TTS_SERVER = if ($env:ARA_TTS_SERVER) { $env:ARA_TTS_SERVER } else { "http://127.0.0.1:5111" }
-$LogDir = "$env:LOCALAPPDATA\ara-tts\logs"
+$CORTANA_TTS_SERVER = if ($env:CORTANA_TTS_SERVER) { $env:CORTANA_TTS_SERVER } else { "http://127.0.0.1:5111" }
+$LogDir = "$env:LOCALAPPDATA\cortana-tts\logs"
 $null = New-Item -ItemType Directory -Force -Path $LogDir
-$LOGFILE = "$LogDir\ara-tts-hook.log"
+$LOGFILE = "$LogDir\cortana-tts-hook.log"
 
-$ConfigDir = "$env:APPDATA\ara-tts"
+$ConfigDir = "$env:APPDATA\cortana-tts"
 $TTS_TIMING_FILE = "$ConfigDir\tts_timing"
 
-$RuntimeDir = "$env:TEMP\ara-tts-$([System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value)"
+$RuntimeDir = "$env:TEMP\cortana-tts-$([System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value)"
 $null = New-Item -ItemType Directory -Force -Path $RuntimeDir
 $TTS_PLAYED_FLAG = "$RuntimeDir\tts_played"
 $TTS_LAST_HASH = "$RuntimeDir\tts_last_hash"
@@ -24,7 +24,7 @@ $TTS_LAST_HASH = "$RuntimeDir\tts_last_hash"
 function Write-Log {
     param([string]$Message)
     $ts = Get-Date -Format "HH:mm:ss.fff"
-    Add-Content -Path $LOGFILE -Value "$ts [ara-tts] $Message"
+    Add-Content -Path $LOGFILE -Value "$ts [cortana-tts] $Message"
 }
 
 function Get-Md5 {
@@ -104,7 +104,7 @@ function Invoke-FireTts {
     Start-Job -ScriptBlock {
         param($Url, $Json)
         Invoke-RestMethod -Uri "$Url/speak" -Method Post -Body $Json -ContentType "application/json" -TimeoutSec 10
-    } -ArgumentList $ARA_TTS_SERVER, $json | Out-Null
+    } -ArgumentList $CORTANA_TTS_SERVER, $json | Out-Null
 }
 
 # Read input from stdin
@@ -188,7 +188,7 @@ if (-not $extracted.Text) {
     Start-Job -ScriptBlock {
         param($Url)
         Invoke-RestMethod -Uri "$Url/alert" -Method Post -TimeoutSec 10
-    } -ArgumentList $ARA_TTS_SERVER | Out-Null
+    } -ArgumentList $CORTANA_TTS_SERVER | Out-Null
     exit 0
 }
 

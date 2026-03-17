@@ -6,7 +6,7 @@ import numpy as np
 from kokoro import KPipeline
 
 logger = logging.getLogger(__name__)
-perf_logger = logging.getLogger("ara_tts.perf")
+perf_logger = logging.getLogger("cortana_tts.perf")
 
 FADE_MS = 10  # fade-in/fade-out duration in milliseconds
 SAMPLE_RATE = 24000

@@ -9,11 +9,11 @@ import wave
 
 import numpy as np
 
-from ara_tts.tts_engine import TTSEngine, SAMPLE_RATE
-from ara_tts.audio_player import AudioPlayer
+from cortana_tts.tts_engine import TTSEngine, SAMPLE_RATE
+from cortana_tts.audio_player import AudioPlayer
 
 logger = logging.getLogger(__name__)
-perf_logger = logging.getLogger("ara_tts.perf")
+perf_logger = logging.getLogger("cortana_tts.perf")
 
 DEBUG_DUMP = os.getenv("TTS_DEBUG_DUMP", "").lower() in ("1", "true", "yes")
 DUMP_DIR = os.path.expanduser("~/Desktop/tts_debug")

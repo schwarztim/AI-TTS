@@ -1,11 +1,11 @@
-# ara-tts copilot wrapper
-# Wraps `gh copilot` to speak responses via ara-tts (Windows PowerShell).
-# Append to your PowerShell profile or install via: ara-tts install copilot
+# cortana-tts copilot wrapper
+# Wraps `gh copilot` to speak responses via cortana-tts (Windows PowerShell).
+# Append to your PowerShell profile or install via: cortana-tts install copilot
 
 function Invoke-AraTtsCopilot {
     param([Parameter(ValueFromRemainingArguments)][string[]]$Args)
 
-    $ARA_TTS_URL = if ($env:ARA_TTS_SERVER) { $env:ARA_TTS_SERVER } else { "http://127.0.0.1:5111" }
+    $CORTANA_TTS_URL = if ($env:CORTANA_TTS_SERVER) { $env:CORTANA_TTS_SERVER } else { "http://127.0.0.1:5111" }
 
     # Run gh copilot and capture output
     $output = & gh copilot @Args 2>&1 | Out-String
@@ -21,7 +21,7 @@ function Invoke-AraTtsCopilot {
         Start-Job -ScriptBlock {
             param($Url, $Body)
             Invoke-RestMethod -Uri "$Url/speak" -Method Post -Body $Body -ContentType "application/json" -TimeoutSec 30
-        } -ArgumentList $ARA_TTS_URL, $body | Out-Null
+        } -ArgumentList $CORTANA_TTS_URL, $body | Out-Null
     }
 }
 
