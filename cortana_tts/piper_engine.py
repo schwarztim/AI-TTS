@@ -21,6 +21,7 @@ MIN_CHUNK_CHARS = 100
 _HF_BASE = "https://huggingface.co/rhasspy/piper-voices/resolve/v1.0.0"
 
 PIPER_VOICES = [
+    "en_US-hfc_female-medium",
     "en_US-lessac-medium",
     "en_US-ryan-medium",
     "en_US-amy-medium",
@@ -98,7 +99,7 @@ class PiperEngine:
     Drop-in replacement for TTSEngine with identical interface.
     """
 
-    def __init__(self, voice: str = "en_US-lessac-medium", speed: float = 1.0):
+    def __init__(self, voice: str = "en_US-hfc_female-medium", speed: float = 1.0):
         self.voice = voice
         self.speed = speed
         self._voice_obj = None

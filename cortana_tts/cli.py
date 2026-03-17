@@ -185,7 +185,7 @@ def _run_setup_wizard_lightweight():
         click.echo(f"  {i}) {v}")
     click.echo("")
 
-    piper_voice = "en_US-lessac-medium"
+    piper_voice = "en_US-hfc_female-medium"
     click.echo(f"Using default voice: {piper_voice}")
     click.echo("(You can change this later with: cortana-tts engine lightweight <voice>)")
     click.echo("")
@@ -738,7 +738,7 @@ def engine_standard():
 
 
 @cmd_engine.command("lightweight")
-@click.argument("voice", default="en_US-lessac-medium", required=False)
+@click.argument("voice", default="en_US-hfc_female-medium", required=False)
 def engine_lightweight(voice: str):
     """Switch to the lightweight piper-tts engine (optionally specify a voice)."""
     from cortana_tts.piper_engine import PIPER_VOICES, _model_paths
