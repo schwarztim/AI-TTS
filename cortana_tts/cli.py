@@ -628,31 +628,34 @@ def _install_copilot_unix():
             continue
         existing = rc.read_text()
 
-        # Already using the new source-file approach
-        if str(dest) in existing:
+        has_source_line = str(dest) in existing
+        has_old_inline = old_marker in existing
+
+        # Already installed AND no stale inline snippet — nothing to do
+        if has_source_line and not has_old_inline:
             click.echo(f"Already installed in {rc}")
             continue
 
-        # Migrate from old inline-snippet approach: replace block with source line
-        if old_marker in existing:
+        # Remove any old inline snippet block (whether or not source line exists)
+        if has_old_inline:
             lines = existing.splitlines(keepends=True)
             new_lines = []
             skip = False
-            replaced = False
             for line in lines:
                 if old_marker in line:
                     skip = True
-                    if not replaced:
-                        new_lines.append(f"\n{rc_comment}\n{source_line}\n")
-                        replaced = True
                     continue
                 if skip:
                     if line.strip() == "":
                         skip = False
                     continue
                 new_lines.append(line)
+            # Only add source line if it wasn't already present
+            if not has_source_line:
+                new_lines.append(f"\n{rc_comment}\n{source_line}\n")
             rc.write_text("".join(new_lines))
-            click.echo(f"Migrated {rc} (replaced inline snippet with source line)")
+            label = "Removed stale inline snippet from" if has_source_line else "Migrated"
+            click.echo(f"{label} {rc}")
             installed_in.append(str(rc))
             continue
 
@@ -689,30 +692,31 @@ def _install_copilot_windows():
     profile.parent.mkdir(parents=True, exist_ok=True)
 
     existing = profile.read_text() if profile.exists() else ""
-    if str(dest) in existing:
+    has_source_line = str(dest) in existing
+    has_old_inline = old_marker in existing
+
+    if has_source_line and not has_old_inline:
         click.echo(f"Already installed in {profile}")
         return
 
-    if old_marker in existing:
-        # Migrate from inline snippet
+    if has_old_inline:
         lines = existing.splitlines(keepends=True)
         new_lines = []
         skip = False
-        replaced = False
         for line in lines:
             if old_marker in line:
                 skip = True
-                if not replaced:
-                    new_lines.append(f"\n# cortana-tts copilot integration\n{dot_source}\n")
-                    replaced = True
                 continue
             if skip:
                 if line.strip() == "":
                     skip = False
                 continue
             new_lines.append(line)
+        if not has_source_line:
+            new_lines.append(f"\n# cortana-tts copilot integration\n{dot_source}\n")
         profile.write_text("".join(new_lines))
-        click.echo(f"Migrated {profile}")
+        label = "Removed stale inline snippet from" if has_source_line else "Migrated"
+        click.echo(f"{label} {profile}")
         return
 
     with open(profile, "a") as f:
