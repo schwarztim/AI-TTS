@@ -196,6 +196,9 @@ class PiperEngine:
         import wave
         buf = io.BytesIO()
         with wave.open(buf, "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)  # 16-bit
+            wf.setframerate(SAMPLE_RATE)
             voice.synthesize(text, wf)
         buf.seek(0)
         with wave.open(buf, "rb") as wf:
