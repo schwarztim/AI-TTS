@@ -328,13 +328,13 @@ def install_claude():
 
     def _ensure_hook(event: str, cmd: str):
         event_hooks = hooks.setdefault(event, [])
-        # Avoid duplicates
+        # Claude Code format: {"matcher": "", "hooks": [{"type": "command", "command": "..."}]}
         for entry in event_hooks:
-            if isinstance(entry, dict) and entry.get("command") == cmd:
-                return
-            if entry == cmd:
-                return
-        event_hooks.append({"type": "command", "command": cmd})
+            if isinstance(entry, dict):
+                for h in entry.get("hooks", []):
+                    if isinstance(h, dict) and h.get("command") == cmd:
+                        return
+        event_hooks.append({"matcher": "", "hooks": [{"type": "command", "command": cmd}]})
 
     _ensure_hook("Stop", notify_cmd)
     _ensure_hook("PreToolUse", notify_cmd)
