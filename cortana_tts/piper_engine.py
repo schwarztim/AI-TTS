@@ -176,7 +176,7 @@ class PiperEngine:
     def _synthesize_chunk(self, text: str) -> np.ndarray:
         """Synthesize a single text chunk. Returns float32 numpy array."""
         self._ensure_voice()
-        raw = b"".join(self._voice_obj.synthesize_stream_raw(text))
+        raw = self._synthesize_raw(text)
         audio = self._raw_bytes_to_float32(raw)
         audio = audio - audio.mean()
         audio = self._apply_fade(audio)
@@ -184,6 +184,22 @@ class PiperEngine:
         if peak > 1.0:
             audio = audio / peak
         return audio
+
+    def _synthesize_raw(self, text: str) -> bytes:
+        """Get raw int16 PCM bytes from piper, handling API differences."""
+        voice = self._voice_obj
+        # Preferred: synthesize_stream_raw (yields raw bytes per sentence)
+        if hasattr(voice, "synthesize_stream_raw"):
+            return b"".join(voice.synthesize_stream_raw(text))
+        # Fallback: synthesize() writes to a wave.Wave_write file object
+        import io
+        import wave
+        buf = io.BytesIO()
+        with wave.open(buf, "wb") as wf:
+            voice.synthesize(text, wf)
+        buf.seek(0)
+        with wave.open(buf, "rb") as wf:
+            return wf.readframes(wf.getnframes())
 
     def _split_text(self, text: str) -> list[str]:
         """Split text into sentence-level chunks for streaming."""
