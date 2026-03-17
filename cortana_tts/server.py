@@ -102,9 +102,20 @@ def _get_env_path() -> Path:
 def create_pipeline() -> tuple[SpeakPipeline, AlertCache]:
     _env_path = _get_env_path()
     load_dotenv(_env_path)
-    voice = os.getenv("TTS_VOICE", "af_heart")
+
+    tts_engine_name = os.getenv("TTS_ENGINE", "standard").lower()
     speed = float(os.getenv("TTS_SPEED", "1.1"))
-    engine = TTSEngine(voice=voice, speed=speed)
+
+    if tts_engine_name == "piper":
+        from cortana_tts.piper_engine import PiperEngine
+        piper_voice = os.getenv("TTS_PIPER_VOICE", "en_US-lessac-medium")
+        engine = PiperEngine(voice=piper_voice, speed=speed)
+        logger.info("Using PiperEngine (lightweight), voice=%s", piper_voice)
+    else:
+        voice = os.getenv("TTS_VOICE", "af_heart")
+        engine = TTSEngine(voice=voice, speed=speed)
+        logger.info("Using TTSEngine (standard), voice=%s", voice)
+
     player = AudioPlayer()
     pipeline = SpeakPipeline(tts_engine=engine, audio_player=player, broadcaster=broadcaster)
     cache_dir = Path(os.getenv("ALERT_CACHE_DIR", Path.home() / ".config" / "cortana-tts" / "alert_cache"))

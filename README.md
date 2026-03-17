@@ -22,6 +22,26 @@ sudo apt install libportaudio2
 
 ---
 
+## Engine options
+
+| Engine | Install size | Voices | Requires |
+|---|---|---|---|
+| Standard (default) | ~1.5 GB | 22 neural voices | PyTorch + HuggingFace |
+| Lightweight | ~80 MB | 5 English voices | Nothing extra |
+
+The setup wizard will ask which you prefer on first run. You can also switch at any time:
+
+```bash
+cortana-tts engine                    # show current engine
+cortana-tts engine standard           # switch to standard (kokoro)
+cortana-tts engine lightweight        # switch to lightweight (piper-tts)
+cortana-tts engine lightweight en_US-ryan-medium  # switch with specific voice
+```
+
+Available lightweight voices: `en_US-lessac-medium`, `en_US-ryan-medium`, `en_US-amy-medium`, `en_GB-alba-medium`, `en_GB-northern_english_male-medium`
+
+---
+
 ## Quick start
 
 ```bash
@@ -126,7 +146,9 @@ Key settings:
 
 | Variable | Default | Description |
 |---|---|---|
-| `TTS_VOICE` | `af_heart` | Active voice |
+| `TTS_ENGINE` | `standard` | `standard` (kokoro) or `piper` (lightweight) |
+| `TTS_VOICE` | `af_heart` | Active voice (standard engine) |
+| `TTS_PIPER_VOICE` | `en_US-lessac-medium` | Active voice (piper engine) |
 | `TTS_PORT` | `5111` | Server port |
 | `TTS_SPEED` | `1.1` | Speech speed multiplier |
 | `CORTANA_TTS_SERVER` | `http://127.0.0.1:5111` | Server URL (for hook scripts) |
@@ -197,6 +219,9 @@ cortana-tts status
 cortana-tts voice list
 cortana-tts voice set <name>
 cortana-tts speak "<text>"
+cortana-tts engine
+cortana-tts engine standard
+cortana-tts engine lightweight [voice]
 cortana-tts install claude|opencode|copilot
 cortana-tts uninstall claude|opencode|copilot
 ```

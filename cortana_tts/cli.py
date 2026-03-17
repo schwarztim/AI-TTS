@@ -116,17 +116,100 @@ def main():
 # ---------------------------------------------------------------------------
 
 def _model_cached() -> bool:
-    """Return True if the TTS model weights are already downloaded."""
-    cache = Path.home() / ".cache" / "huggingface" / "hub"
-    return any(cache.glob("models--hexgrad*")) if cache.exists() else False
+    """Return True if either the standard or lightweight model is already set up."""
+    # Check standard (kokoro / HuggingFace)
+    hf_cache = Path.home() / ".cache" / "huggingface" / "hub"
+    if hf_cache.exists() and any(hf_cache.glob("models--hexgrad*")):
+        return True
+    # Check lightweight (piper voices)
+    piper_cache = Path.home() / ".config" / "cortana-tts" / "piper-voices"
+    if piper_cache.exists() and any(piper_cache.glob("*.onnx")):
+        return True
+    # Check if engine preference was already saved (user ran wizard before)
+    env_path = _config_dir() / ".env"
+    if env_path.exists():
+        content = env_path.read_text()
+        if "TTS_ENGINE=" in content:
+            return True
+    return False
+
+
+def _save_env_var(key: str, value: str):
+    """Write or update a KEY=value line in ~/.config/cortana-tts/.env."""
+    env_path = _config_dir() / ".env"
+    env_path.parent.mkdir(parents=True, exist_ok=True)
+    existing = env_path.read_text() if env_path.exists() else ""
+    lines = existing.splitlines()
+    new_lines = []
+    found = False
+    for line in lines:
+        if line.startswith(f"{key}=") or line.startswith(f"{key} ="):
+            new_lines.append(f"{key}={value}")
+            found = True
+        else:
+            new_lines.append(line)
+    if not found:
+        new_lines.append(f"{key}={value}")
+    env_path.write_text("\n".join(new_lines) + "\n")
 
 
 def _run_setup_wizard(voice: str):
-    """First-run wizard: explain the download, optionally save an HF token, warm up model."""
+    """First-run wizard: ask engine preference, download models, save config."""
     click.echo("")
     click.echo("╔══════════════════════════════════════════╗")
     click.echo("║        cortana-tts  first-time setup     ║")
     click.echo("╚══════════════════════════════════════════╝")
+    click.echo("")
+    click.echo("Which TTS engine would you like to use?")
+    click.echo("")
+    click.echo("  1) Standard    — 22 voices, higher quality, ~1.5 GB download (PyTorch + model)")
+    click.echo("  2) Lightweight — faster setup, ~80 MB, no account needed (piper-tts / ONNX)")
+    click.echo("")
+    engine_choice = click.prompt("Choice [1/2]", default="1").strip()
+
+    if engine_choice == "2":
+        _run_setup_wizard_lightweight()
+    else:
+        _run_setup_wizard_standard(voice)
+
+
+def _run_setup_wizard_lightweight():
+    """Set up lightweight piper-tts engine."""
+    from cortana_tts.piper_engine import PIPER_VOICES, _model_paths
+
+    click.echo("")
+    click.echo("Setting up lightweight piper-tts engine...")
+    click.echo("")
+    click.echo("Available voices:")
+    for i, v in enumerate(PIPER_VOICES, 1):
+        click.echo(f"  {i}) {v}")
+    click.echo("")
+
+    piper_voice = "en_US-lessac-medium"
+    click.echo(f"Using default voice: {piper_voice}")
+    click.echo("(You can change this later with: cortana-tts engine lightweight <voice>)")
+    click.echo("")
+    click.echo(f"Downloading voice model for '{piper_voice}'...")
+    click.echo("(~80 MB — only happens once)")
+    click.echo("")
+
+    try:
+        _model_paths(piper_voice)
+        click.echo("")
+        click.echo("✓ Piper voice downloaded and ready.")
+        click.echo("")
+    except Exception as e:
+        click.echo(f"Warning: voice download failed: {e}", err=True)
+        click.echo("The server will attempt to download on first use.", err=True)
+
+    _save_env_var("TTS_ENGINE", "piper")
+    _save_env_var("TTS_PIPER_VOICE", piper_voice)
+    click.echo("Engine saved to ~/.config/cortana-tts/.env")
+    click.echo("")
+
+
+def _run_setup_wizard_standard(voice: str):
+    """Set up standard kokoro engine."""
     click.echo("")
     click.echo("The TTS model needs to be downloaded once (~326 MB).")
     click.echo("This is stored locally — no data ever leaves your machine.")
@@ -138,13 +221,7 @@ def _run_setup_wizard(voice: str):
         click.echo("HuggingFace token (optional — speeds up download, press Enter to skip):")
         hf_token = click.prompt("  Token", default="", show_default=False).strip() or None
         if hf_token:
-            # Save to config .env
-            env_path = _config_dir() / ".env"
-            env_path.parent.mkdir(parents=True, exist_ok=True)
-            existing = env_path.read_text() if env_path.exists() else ""
-            if "HF_TOKEN=" not in existing:
-                with open(env_path, "a") as f:
-                    f.write(f"\nHF_TOKEN={hf_token}\n")
+            _save_env_var("HF_TOKEN", hf_token)
             click.echo("  Token saved to ~/.config/cortana-tts/.env")
 
     click.echo("")
@@ -172,6 +249,8 @@ def _run_setup_wizard(voice: str):
         click.echo("")
         click.echo("✓ Model downloaded and ready.")
         click.echo("")
+
+    _save_env_var("TTS_ENGINE", "standard")
 
 
 @main.command("start")
@@ -621,6 +700,65 @@ def uninstall_copilot():
             click.echo(f"Removed wrapper from {rc}")
         else:
             click.echo(f"Wrapper not found in {rc}")
+
+
+# ---------------------------------------------------------------------------
+# Engine management
+# ---------------------------------------------------------------------------
+
+def _read_current_engine() -> str:
+    """Read TTS_ENGINE from ~/.config/cortana-tts/.env, defaulting to 'standard'."""
+    env_path = _config_dir() / ".env"
+    if env_path.exists():
+        for line in env_path.read_text().splitlines():
+            line = line.strip()
+            if line.startswith("TTS_ENGINE="):
+                return line.split("=", 1)[1].strip()
+    return "standard"
+
+
+@main.group("engine", invoke_without_command=True)
+@click.pass_context
+def cmd_engine(ctx):
+    """Show or switch the active TTS engine."""
+    if ctx.invoked_subcommand is None:
+        engine = _read_current_engine()
+        label = "Standard (kokoro, 22 voices)" if engine == "standard" else "Lightweight (piper-tts, ONNX)"
+        click.echo(f"Active engine: {engine}  —  {label}")
+
+
+@cmd_engine.command("standard")
+def engine_standard():
+    """Switch to the standard kokoro engine."""
+    _save_env_var("TTS_ENGINE", "standard")
+    click.echo("Engine set to: standard (kokoro)")
+    click.echo("Restart the server to apply: cortana-tts restart")
+
+
+@cmd_engine.command("lightweight")
+@click.argument("voice", default="en_US-lessac-medium", required=False)
+def engine_lightweight(voice: str):
+    """Switch to the lightweight piper-tts engine (optionally specify a voice)."""
+    from cortana_tts.piper_engine import PIPER_VOICES, _model_paths
+
+    if voice not in PIPER_VOICES:
+        click.echo(f"Unknown piper voice: {voice}", err=True)
+        click.echo("Available voices:")
+        for v in PIPER_VOICES:
+            click.echo(f"  {v}")
+        sys.exit(1)
+
+    click.echo(f"Downloading piper voice '{voice}' if not cached...")
+    try:
+        _model_paths(voice)
+        click.echo("✓ Voice ready.")
+    except Exception as e:
+        click.echo(f"Warning: download failed: {e}", err=True)
+
+    _save_env_var("TTS_ENGINE", "piper")
+    _save_env_var("TTS_PIPER_VOICE", voice)
+    click.echo(f"Engine set to: lightweight (piper-tts), voice: {voice}")
+    click.echo("Restart the server to apply: cortana-tts restart")
 
 
 if __name__ == "__main__":
