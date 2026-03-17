@@ -215,14 +215,16 @@ def _run_setup_wizard_standard(voice: str):
     click.echo("This is stored locally — no data ever leaves your machine.")
     click.echo("")
 
-    # Optional HuggingFace token (speeds up download, not required)
+    # Optional HuggingFace token — not required, just faster
     hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
     if not hf_token:
-        click.echo("HuggingFace token (optional — speeds up download, press Enter to skip):")
+        click.echo("HuggingFace token (press Enter to skip — download will still work, just slower):")
         hf_token = click.prompt("  Token", default="", show_default=False).strip() or None
         if hf_token:
             _save_env_var("HF_TOKEN", hf_token)
             click.echo("  Token saved to ~/.config/cortana-tts/.env")
+        else:
+            click.echo("  Skipping — downloading without token (this is fine, may be slower).")
 
     click.echo("")
     click.echo(f"Downloading model and warming up voice '{voice}'...")

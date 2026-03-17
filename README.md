@@ -6,19 +6,29 @@ Speaks assistant responses aloud in real time using a fast, on-device neural TTS
 
 ---
 
+## Requirements
+
+| Engine | Python version |
+|---|---|
+| Lightweight (piper-tts) | Python 3.10+ |
+| Standard (neural) | Python 3.10–3.12 (PyTorch does not yet support 3.13+) |
+
+**Linux** also requires PortAudio:
+```bash
+sudo apt install libportaudio2   # Debian/Ubuntu
+sudo pacman -S portaudio          # Arch
+brew install portaudio            # macOS (if not auto-bundled)
+```
+
+**Windows** requires the [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe).
+
+---
+
 ## Install
 
 ```bash
 pip install cortana-tts
 ```
-
-**Linux** also requires PortAudio:
-
-```bash
-sudo apt install libportaudio2
-```
-
-**Windows** requires the [Visual C++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe).
 
 ---
 
