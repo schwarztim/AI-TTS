@@ -115,6 +115,65 @@ def main():
 # Server management
 # ---------------------------------------------------------------------------
 
+def _model_cached() -> bool:
+    """Return True if the TTS model weights are already downloaded."""
+    cache = Path.home() / ".cache" / "huggingface" / "hub"
+    return any(cache.glob("models--hexgrad*")) if cache.exists() else False
+
+
+def _run_setup_wizard(voice: str):
+    """First-run wizard: explain the download, optionally save an HF token, warm up model."""
+    click.echo("")
+    click.echo("╔══════════════════════════════════════════╗")
+    click.echo("║        cortana-tts  first-time setup     ║")
+    click.echo("╚══════════════════════════════════════════╝")
+    click.echo("")
+    click.echo("The TTS model needs to be downloaded once (~326 MB).")
+    click.echo("This is stored locally — no data ever leaves your machine.")
+    click.echo("")
+
+    # Optional HuggingFace token (speeds up download, not required)
+    hf_token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if not hf_token:
+        click.echo("HuggingFace token (optional — speeds up download, press Enter to skip):")
+        hf_token = click.prompt("  Token", default="", show_default=False).strip() or None
+        if hf_token:
+            # Save to config .env
+            env_path = _config_dir() / ".env"
+            env_path.parent.mkdir(parents=True, exist_ok=True)
+            existing = env_path.read_text() if env_path.exists() else ""
+            if "HF_TOKEN=" not in existing:
+                with open(env_path, "a") as f:
+                    f.write(f"\nHF_TOKEN={hf_token}\n")
+            click.echo("  Token saved to ~/.config/cortana-tts/.env")
+
+    click.echo("")
+    click.echo(f"Downloading model and warming up voice '{voice}'...")
+    click.echo("(This may take a minute on slow connections — only happens once)")
+    click.echo("")
+
+    env = os.environ.copy()
+    if hf_token:
+        env["HF_TOKEN"] = hf_token
+    env["TTS_VOICE"] = voice
+
+    # Warm up by importing and running a tiny inference — downloads model weights
+    warmup_script = (
+        "from cortana_tts.tts_engine import TTSEngine; "
+        "import os; "
+        "e = TTSEngine(voice=os.environ.get('TTS_VOICE','af_heart')); "
+        "list(e.generate_stream('Ready.')); "
+        "print('Model ready.')"
+    )
+    result = subprocess.run([sys.executable, "-c", warmup_script], env=env)
+    if result.returncode != 0:
+        click.echo("Warning: model warmup failed. The server will still attempt to start.", err=True)
+    else:
+        click.echo("")
+        click.echo("✓ Model downloaded and ready.")
+        click.echo("")
+
+
 @main.command("start")
 @click.option("--port", default=5111, show_default=True, help="Port to listen on.")
 @click.option("--voice", default="af_heart", show_default=True, help="Voice to use.")
@@ -124,6 +183,10 @@ def cmd_start(port: int, voice: str, bg: bool):
     if _is_running():
         click.echo("cortana-tts server is already running.")
         return
+
+    # First-run: model not yet downloaded
+    if not _model_cached():
+        _run_setup_wizard(voice)
 
     env = os.environ.copy()
     env["TTS_PORT"] = str(port)
