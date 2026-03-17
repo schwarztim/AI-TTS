@@ -175,6 +175,20 @@ def _run_setup_wizard(voice: str):
 
 def _run_setup_wizard_lightweight():
     """Set up lightweight piper-tts engine."""
+    try:
+        import piper  # noqa: F401
+    except ImportError:
+        click.echo(
+            "\nError: piper-tts is not installed in this Python environment.\n"
+            f"  Python: {sys.executable}\n\n"
+            "Fix: install piper-tts into this environment:\n"
+            f"  {sys.executable} -m pip install piper-tts\n\n"
+            "Tip: if you have multiple Python installs (Homebrew, system, pyenv),\n"
+            "make sure piper-tts is installed into the same Python that runs cortana-tts.\n",
+            err=True,
+        )
+        return False
+
     from cortana_tts.piper_engine import PIPER_VOICES, _model_paths
 
     click.echo("")
@@ -495,22 +509,46 @@ def install_claude():
     tts_instructions = f"""
 {tts_marker}
 
-Every response MUST include a hidden `<tts>` tag with a natural spoken summary.
+Every response MUST include at least one hidden `<tts>` tag. The hook reads
+settings output by the UserPromptSubmit event to know what to speak.
 
-Format — wrap in HTML comment so it stays invisible in terminal:
+### Tag types
+
 ```
-<!-- <tts>spoken summary here</tts> -->
-<!-- <tts mood="error">something went wrong</tts> -->
+<!-- <tts type="end">final summary, recap, follow-up questions</tts> -->
+<!-- <tts type="confirm">about to do X</tts> -->
+<!-- <tts type="update" mood="warn">hit an issue, trying another approach</tts> -->
 ```
 
-Rules for TTS content:
-- Speak like a human — natural, conversational, not robotic
-- Summarize what was done and the outcome. Don't read out code, file paths, or technical details
-- If you have questions for the user, ask them naturally in the spoken summary
-- Keep it concise — 1-3 sentences for simple tasks, more for complex ones
-- Valid moods: `error`, `success`, `warn` (omit for default)
-- The `<!-- -->` wrapper is mandatory — without it the text renders visibly in terminal
-- TTS and terminal text are separate channels — don't repeat what's in the TTS tag in your visible response
+- `end` — always include. Final spoken summary of what was done. Include
+  any follow-up questions naturally in the sentence. Spoken when Claude stops.
+- `confirm` — include only if `tts_confirm=on`. Brief sentence before starting
+  significant work. Place it right before the first tool call.
+- `update` — include only if `tts_updates=on`. Mid-response status, especially
+  when something unexpected happened. Place after the issue is described.
+
+Omitting the `type=` attribute defaults to `end`.
+
+### Verbosity
+
+- `tts_verbosity=normal` — 1–3 concise sentences. Key outcome only.
+- `tts_verbosity=verbose` — Comprehensive. Cover every file changed, every
+  decision made, every caveat. Still spoken prose, not a list.
+
+### Personalities
+
+Speak as the configured personality (`tts_personality=` from hook context):
+- `ara` (default) — natural, direct, slightly warm. Short sentences.
+- `professional` — formal, concise. Business register. No filler.
+- `casual` — relaxed, brief. Like messaging a teammate.
+- `brief` — one sentence only. The single most important thing.
+
+### Rules
+
+- Natural spoken prose — no markdown, no bullet points, no code snippets
+- The `<!-- -->` wrapper is mandatory — without it the text renders in terminal
+- TTS and terminal output are separate channels — do not repeat yourself
+- Valid moods: `error`, `success`, `warn`, `melancholy` (omit for default)
 """
 
     existing_md = claude_md_path.read_text() if claude_md_path.exists() else ""
@@ -774,6 +812,22 @@ def engine_standard():
 @click.argument("voice", default="en_US-hfc_female-medium", required=False)
 def engine_lightweight(voice: str):
     """Switch to the lightweight piper-tts engine (optionally specify a voice)."""
+    # Verify piper-tts is importable in this Python runtime before switching
+    try:
+        import piper  # noqa: F401
+    except ImportError:
+        click.echo(
+            "Error: piper-tts is not installed in this Python environment.\n"
+            f"  Python: {sys.executable}\n\n"
+            "Fix: install piper-tts into this environment:\n"
+            f"  {sys.executable} -m pip install piper-tts\n\n"
+            "Note: if you have multiple Python installs (e.g. Homebrew + system),\n"
+            "make sure you run 'pip install piper-tts' with the same Python that\n"
+            "runs 'cortana-tts'. You can check with: which cortana-tts",
+            err=True,
+        )
+        sys.exit(1)
+
     from cortana_tts.piper_engine import PIPER_VOICES, _model_paths
 
     if voice not in PIPER_VOICES:
@@ -794,6 +848,132 @@ def engine_lightweight(voice: str):
     _save_env_var("TTS_PIPER_VOICE", voice)
     click.echo(f"Engine set to: lightweight (piper-tts), voice: {voice}")
     click.echo("Restart the server to apply: cortana-tts restart")
+
+
+# ---------------------------------------------------------------------------
+# Personality management
+# ---------------------------------------------------------------------------
+
+PERSONALITIES = {
+    "ara": "Natural, direct, slightly warm. Short conversational sentences.",
+    "professional": "Formal and concise. Business register. No filler words.",
+    "casual": "Relaxed, brief, friendly. Like messaging a teammate.",
+    "brief": "One sentence only. The single most important thing.",
+}
+
+
+def _read_config_file(name: str, default: str) -> str:
+    p = _config_dir() / name
+    return p.read_text().strip() if p.exists() else default
+
+
+def _write_config_file(name: str, value: str) -> None:
+    p = _config_dir()
+    p.mkdir(parents=True, exist_ok=True)
+    (p / name).write_text(value)
+
+
+@main.group("personality", invoke_without_command=True)
+@click.pass_context
+def cmd_personality(ctx):
+    """Show or switch the TTS speaking personality."""
+    if ctx.invoked_subcommand is None:
+        current = _read_config_file("tts_personality", "ara")
+        desc = PERSONALITIES.get(current, "custom")
+        click.echo(f"Active personality: {current}  —  {desc}")
+
+
+@cmd_personality.command("list")
+def personality_list():
+    """List available personalities."""
+    current = _read_config_file("tts_personality", "ara")
+    for name, desc in PERSONALITIES.items():
+        marker = " *" if name == current else "  "
+        click.echo(f"{marker} {name:<14} {desc}")
+
+
+@cmd_personality.command("set")
+@click.argument("name")
+def personality_set(name: str):
+    """Set the active personality (ara, professional, casual, brief)."""
+    if name not in PERSONALITIES:
+        click.echo(f"Unknown personality: {name}", err=True)
+        click.echo(f"Available: {', '.join(PERSONALITIES)}")
+        sys.exit(1)
+    _write_config_file("tts_personality", name)
+    click.echo(f"Personality set to: {name}  —  {PERSONALITIES[name]}")
+    click.echo("Takes effect on the next Claude response (no restart needed).")
+
+
+# ---------------------------------------------------------------------------
+# Messaging frequency management
+# ---------------------------------------------------------------------------
+
+MESSAGING_TYPES = {
+    "confirm": ("messaging_confirm", "off",
+                "Speak before tool use — announces what Claude is about to do"),
+    "updates": ("messaging_updates", "on",
+                "Speak mid-response status/error updates"),
+    "end":     ("messaging_end", "on",
+                "Speak final summary with recap and follow-up questions"),
+}
+
+
+@main.group("messaging", invoke_without_command=True)
+@click.pass_context
+def cmd_messaging(ctx):
+    """Show or configure which message types are spoken."""
+    if ctx.invoked_subcommand is None:
+        for key, (filename, default, desc) in MESSAGING_TYPES.items():
+            val = _read_config_file(filename, default)
+            marker = "on " if val == "on" else "off"
+            click.echo(f"  {marker}  {key:<10} {desc}")
+
+
+@cmd_messaging.command("confirm")
+@click.argument("state", type=click.Choice(["on", "off"]))
+def messaging_confirm(state: str):
+    """Enable/disable confirm messages (spoken before tool use)."""
+    _write_config_file("messaging_confirm", state)
+    click.echo(f"Confirm messages: {state}")
+
+
+@cmd_messaging.command("updates")
+@click.argument("state", type=click.Choice(["on", "off"]))
+def messaging_updates(state: str):
+    """Enable/disable mid-response update/status messages."""
+    _write_config_file("messaging_updates", state)
+    click.echo(f"Update messages: {state}")
+
+
+@cmd_messaging.command("end")
+@click.argument("state", type=click.Choice(["on", "off"]))
+def messaging_end(state: str):
+    """Enable/disable end-of-response summary messages."""
+    _write_config_file("messaging_end", state)
+    click.echo(f"End messages: {state}")
+
+
+@cmd_messaging.command("preset")
+@click.argument("name", type=click.Choice(["minimal", "normal", "full"]))
+def messaging_preset(name: str):
+    """Apply a messaging preset.
+
+    \b
+    minimal  end only (quiet during work)
+    normal   end + updates (default)
+    full     confirm + updates + end (most verbose)
+    """
+    presets = {
+        "minimal": {"messaging_confirm": "off", "messaging_updates": "off", "messaging_end": "on"},
+        "normal":  {"messaging_confirm": "off", "messaging_updates": "on",  "messaging_end": "on"},
+        "full":    {"messaging_confirm": "on",  "messaging_updates": "on",  "messaging_end": "on"},
+    }
+    for filename, value in presets[name].items():
+        _write_config_file(filename, value)
+    click.echo(f"Messaging preset: {name}")
+    for filename, value in presets[name].items():
+        click.echo(f"  {filename.replace('messaging_', ''):<10} {value}")
 
 
 if __name__ == "__main__":

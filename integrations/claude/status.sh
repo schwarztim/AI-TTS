@@ -35,13 +35,14 @@ case "$HOOK_EVENT" in
         # Clear TTS played flag (new turn starting)
         CORTANA_TTS_RUNTIME="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/cortana-tts-$(id -u)"
         rm -f "$CORTANA_TTS_RUNTIME/tts_played"
-        # Inject TTS verbosity mode into Claude's context
-        TTS_MODE_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/cortana-tts/tts_mode"
-        if [ -f "$TTS_MODE_FILE" ]; then
-            echo "tts_verbosity=$(cat "$TTS_MODE_FILE")"
-        else
-            echo "tts_verbosity=normal"
-        fi
+        # Inject TTS settings into Claude's context
+        CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cortana-tts"
+        rc() { local f="$CONFIG_DIR/$1"; [ -f "$f" ] && cat "$f" || echo "$2"; }
+        echo "tts_verbosity=$(rc tts_mode normal)"
+        echo "tts_personality=$(rc tts_personality ara)"
+        echo "tts_confirm=$(rc messaging_confirm off)"
+        echo "tts_updates=$(rc messaging_updates on)"
+        echo "tts_end=$(rc messaging_end on)"
         curl -s -X POST "$CORTANA_TTS_SERVER/status" \
             -H "Content-Type: application/json" \
             -d '{"state": "thinking"}' \

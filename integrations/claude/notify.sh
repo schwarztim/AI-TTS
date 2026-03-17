@@ -1,10 +1,9 @@
 #!/usr/bin/env bash
 # integrations/claude/notify.sh — cortana-tts hook for Claude Code
-# Extracts <tts> tag from Claude's response and sends to TTS server.
-# Handles: Stop, Notification, PermissionRequest, PreToolUse (immediate mode)
+# Extracts <tts> tags from Claude's response and sends to TTS server.
+# Supports type="confirm|update|end" with per-type toggles.
 #
 # Install via: cortana-tts install claude
-# Or manually set CORTANA_TTS_SERVER env var to override the server URL.
 
 set -euo pipefail
 
@@ -14,29 +13,56 @@ if [ -d "$HOME/Library/Logs" ]; then
 else
     LOGFILE="${XDG_STATE_HOME:-$HOME/.local/state}/cortana-tts-hook.log"
 fi
-TTS_TIMING_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/cortana-tts/tts_timing"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/cortana-tts"
 CORTANA_TTS_RUNTIME="${XDG_RUNTIME_DIR:-${TMPDIR:-/tmp}}/cortana-tts-$(id -u)"
 mkdir -p "$CORTANA_TTS_RUNTIME"
 TTS_PLAYED_FLAG="$CORTANA_TTS_RUNTIME/tts_played"
 TTS_LAST_HASH="$CORTANA_TTS_RUNTIME/tts_last_hash"
 
-# Portable md5 (macOS: md5, Linux: md5sum)
+# Portable md5
 md5_hash() { command -v md5 >/dev/null 2>&1 && md5 -q || md5sum | cut -d' ' -f1; }
 
-INPUT=$(cat)
+# Read a config file with a default value
+read_config() { local f="$CONFIG_DIR/$1"; [ -f "$f" ] && cat "$f" || echo "$2"; }
 
+# Check if a message type is enabled
+type_enabled() {
+    local type="$1"
+    case "$type" in
+        confirm)  [ "$(read_config messaging_confirm off)" = "on" ] ;;
+        update)   [ "$(read_config messaging_updates on)" = "on" ] ;;
+        end|*)    [ "$(read_config messaging_end on)" = "on" ] ;;
+    esac
+}
+
+INPUT=$(cat)
 HOOK_EVENT=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('hook_event_name','unknown'))" 2>/dev/null || echo "unknown")
 
 echo "$(date +%H:%M:%S.%3N): [cortana-tts] hook entry event=$HOOK_EVENT" >> "$LOGFILE"
 
-# Read TTS timing mode
-TTS_TIMING="on-complete"
-if [ -f "$TTS_TIMING_FILE" ]; then
-    TTS_TIMING=$(cat "$TTS_TIMING_FILE")
-fi
+TTS_TIMING=$(read_config tts_timing on-complete)
 
-# Helper: extract TTS from transcript JSONL (current turn only)
-extract_tts_from_transcript() {
+# Extract ALL <tts> tags from text. Outputs lines of: text|||mood|||type
+extract_tags_from_text() {
+    echo "$1" | python3 -c "
+import sys, re
+text = sys.stdin.read()
+pattern = r'(?:<!--\s*)?<tts([^>]*)>(.*?)</tts>(?:\s*-->)?'
+for m in re.finditer(pattern, text, re.DOTALL):
+    attrs = m.group(1)
+    content = m.group(2).strip()
+    if not content:
+        continue
+    mood_m = re.search(r'mood=\"([^\"]*)\"', attrs)
+    type_m = re.search(r'type=\"([^\"]*)\"', attrs)
+    mood = mood_m.group(1) if mood_m else ''
+    tts_type = type_m.group(1) if type_m else 'end'
+    print(content + '|||' + mood + '|||' + tts_type)
+" 2>/dev/null || true
+}
+
+# Extract ALL <tts> tags from transcript JSONL (current turn only)
+extract_tags_from_transcript() {
     local transcript_path="$1"
     python3 -c "
 import json, re, sys
@@ -65,56 +91,40 @@ with open(sys.argv[1]) as f:
                 if not is_tool_result:
                     last_user_prompt_idx = len(entries) - 1
 
-# Only search assistant messages after the last user prompt (current turn)
-tts = ''
-mood = ''
+pattern = r'(?:<!--\s*)?<tts([^>]*)>(.*?)</tts>(?:\s*-->)?'
 for obj in entries[last_user_prompt_idx + 1:]:
     msg = obj.get('message', {})
     if not isinstance(msg, dict) or msg.get('role') != 'assistant':
         continue
-    content = msg.get('content', [])
-    if not isinstance(content, list):
-        continue
-    for block in content:
+    for block in (msg.get('content', []) or []):
         if isinstance(block, dict) and block.get('type') == 'text':
             text = block.get('text', '')
-            m = re.search(r'(?:<!--\s*)?<tts(?:\s+mood=\"([^\"]*)\")?\s*>(.*?)</tts>(?:\s*-->)?', text, re.DOTALL)
-            if m:
-                tts = m.group(2).strip()
-                mood = m.group(1) or ''
-print(tts + '|||' + mood)
-" "$transcript_path" 2>/dev/null || echo "|||"
+            for m in re.finditer(pattern, text, re.DOTALL):
+                attrs = m.group(1)
+                content_text = m.group(2).strip()
+                if not content_text:
+                    continue
+                mood_m = re.search(r'mood=\"([^\"]*)\"', attrs)
+                type_m = re.search(r'type=\"([^\"]*)\"', attrs)
+                mood = mood_m.group(1) if mood_m else ''
+                tts_type = type_m.group(1) if type_m else 'end'
+                print(content_text + '|||' + mood + '|||' + tts_type)
+" "$transcript_path" 2>/dev/null || true
 }
 
-# Helper: extract TTS from raw text
-extract_tts_from_text() {
-    echo "$1" | python3 -c "
-import sys, re
-text = sys.stdin.read()
-match = re.search(r'(?:<!--\s*)?<tts(?:\s+mood=\"([^\"]*)\")?\s*>(.*?)</tts>(?:\s*-->)?', text, re.DOTALL)
-if match:
-    print(match.group(2).strip() + '|||' + (match.group(1) or ''))
-else:
-    print('|||')
-" 2>/dev/null || echo "|||"
-}
-
-# Helper: fire TTS to server
+# Fire one TTS request (async background)
 fire_tts() {
     local tts_text="$1"
     local mood="$2"
     local mood_json=""
     if [ -n "$mood" ]; then
-        # Whitelist valid moods
         case "$mood" in
             error|success|warn|melancholy) ;;
             *) mood="" ;;
         esac
-        if [ -n "$mood" ]; then
-            mood_json=", \"mood\": \"${mood}\""
-        fi
+        [ -n "$mood" ] && mood_json=", \"mood\": \"${mood}\""
     fi
-    echo "$(date +%H:%M:%S.%3N): [cortana-tts] hook→server POST /speak" >> "$LOGFILE"
+    echo "$(date +%H:%M:%S.%3N): [cortana-tts] POST /speak mood=${mood:-none}" >> "$LOGFILE"
     curl -s -X POST "$CORTANA_TTS_SERVER/speak" \
         -H "Content-Type: application/json" \
         -d "{\"text\": $(echo "$tts_text" | python3 -c 'import sys,json; print(json.dumps(sys.stdin.read()))')$mood_json}" \
@@ -123,15 +133,46 @@ fire_tts() {
         >> "$LOGFILE" 2>&1 &
 }
 
-# --- Notification: skip (system events, no TTS content) ---
+# Speak all matching tags. $1=lines(text|||mood|||type), $2=type filter (empty=all)
+# Prints count of tags spoken.
+speak_tags() {
+    local tags="$1"
+    local only_type="${2:-}"
+    local spoken=0
+    while IFS= read -r line; do
+        [ -z "$line" ] && continue
+        local text="${line%%|||*}"
+        local rest="${line#*|||}"
+        local mood="${rest%%|||*}"
+        local tts_type="${rest##*|||}"
+        [ -z "$text" ] && continue
+        if [ -n "$only_type" ] && [ "$tts_type" != "$only_type" ]; then
+            continue
+        fi
+        if ! type_enabled "$tts_type"; then
+            echo "$(date): skipping type=$tts_type (disabled)" >> "$LOGFILE"
+            continue
+        fi
+        echo "$(date): speaking type=$tts_type mood=${mood:-none}: ${text:0:80}" >> "$LOGFILE"
+        fire_tts "$text" "$mood"
+        spoken=$((spoken + 1))
+        # Small gap between sequential tags so the server pipeline can queue them
+        [ $spoken -gt 1 ] && sleep 0.15
+    done <<< "$tags"
+    echo "$spoken"
+}
+
+# --- Skip Notification events ---
 if [ "$HOOK_EVENT" = "Notification" ]; then
-    echo "$(date): Notification event, skipping" >> "$LOGFILE"
     exit 0
 fi
 
-# --- PreToolUse: immediate mode early TTS ---
+# --- PreToolUse: speak confirm tags (and immediate-mode end tags) ---
 if [ "$HOOK_EVENT" = "PreToolUse" ]; then
-    if [ "$TTS_TIMING" != "immediate" ]; then
+    CONFIRM_ENABLED=$(read_config messaging_confirm off)
+    IMMEDIATE=$( [ "$TTS_TIMING" = "immediate" ] && echo "yes" || echo "no" )
+
+    if [ "$CONFIRM_ENABLED" != "on" ] && [ "$IMMEDIATE" != "yes" ]; then
         exit 0
     fi
     if [ -f "$TTS_PLAYED_FLAG" ]; then
@@ -143,53 +184,58 @@ if [ "$HOOK_EVENT" = "PreToolUse" ]; then
         exit 0
     fi
 
-    TTS_OUTPUT=$(extract_tts_from_transcript "$TRANSCRIPT_PATH")
-    TTS_TEXT="${TTS_OUTPUT%%|||*}"
-    TTS_MOOD="${TTS_OUTPUT##*|||}"
+    TAGS=$(extract_tags_from_transcript "$TRANSCRIPT_PATH")
+    if [ -z "$TAGS" ]; then
+        exit 0
+    fi
 
-    if [ -n "$TTS_TEXT" ]; then
-        # Skip if this is the same TTS we already played (stale transcript)
-        NEW_HASH=$(echo -n "$TTS_TEXT" | md5_hash)
-        OLD_HASH=""
-        [ -f "$TTS_LAST_HASH" ] && OLD_HASH=$(cat "$TTS_LAST_HASH")
-        if [ "$NEW_HASH" = "$OLD_HASH" ]; then
-            echo "$(date): immediate TTS: skipping stale duplicate" >> "$LOGFILE"
-            exit 0
-        fi
-        echo "$(date): immediate TTS: ${TTS_TEXT:0:80}... mood=$TTS_MOOD" >> "$LOGFILE"
+    NEW_HASH=$(echo -n "$TAGS" | md5_hash)
+    OLD_HASH=""
+    [ -f "$TTS_LAST_HASH" ] && OLD_HASH=$(cat "$TTS_LAST_HASH")
+    if [ "$NEW_HASH" = "$OLD_HASH" ]; then
+        exit 0
+    fi
+
+    SPOKE=0
+    if [ "$CONFIRM_ENABLED" = "on" ]; then
+        COUNT=$(speak_tags "$TAGS" "confirm")
+        SPOKE=$((SPOKE + COUNT))
+    fi
+    if [ "$IMMEDIATE" = "yes" ]; then
+        COUNT=$(speak_tags "$TAGS" "end")
+        SPOKE=$((SPOKE + COUNT))
+        COUNT=$(speak_tags "$TAGS" "update")
+        SPOKE=$((SPOKE + COUNT))
+    fi
+    if [ "$SPOKE" -gt 0 ]; then
         touch "$TTS_PLAYED_FLAG"
         echo "$NEW_HASH" > "$TTS_LAST_HASH"
-        fire_tts "$TTS_TEXT" "$TTS_MOOD"
     fi
     exit 0
 fi
 
-# --- Stop in immediate mode: check for NEW final TTS ---
+# --- Stop in immediate mode: speak final end tags if new ---
 if [ "$HOOK_EVENT" = "Stop" ] && [ "$TTS_TIMING" = "immediate" ]; then
     rm -f "$TTS_PLAYED_FLAG"
-
     RESPONSE=$(echo "$INPUT" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
 print(data.get('last_assistant_message', '')[:5000])
 " 2>/dev/null || echo "")
-
-    TTS_OUTPUT=$(extract_tts_from_text "$RESPONSE")
-    TTS_TEXT="${TTS_OUTPUT%%|||*}"
-    TTS_MOOD="${TTS_OUTPUT##*|||}"
-
-    if [ -n "$TTS_TEXT" ]; then
-        echo "$(date): immediate Stop: final TTS: ${TTS_TEXT:0:80}... mood=$TTS_MOOD" >> "$LOGFILE"
-        echo -n "$TTS_TEXT" | md5_hash > "$TTS_LAST_HASH"
-        fire_tts "$TTS_TEXT" "$TTS_MOOD"
-    else
-        echo "$(date): immediate Stop: no TTS in final message, skipping" >> "$LOGFILE"
+    TAGS=$(extract_tags_from_text "$RESPONSE")
+    if [ -n "$TAGS" ]; then
+        NEW_HASH=$(echo -n "$TAGS" | md5_hash)
+        OLD_HASH=""
+        [ -f "$TTS_LAST_HASH" ] && OLD_HASH=$(cat "$TTS_LAST_HASH")
+        if [ "$NEW_HASH" != "$OLD_HASH" ]; then
+            echo "$NEW_HASH" > "$TTS_LAST_HASH"
+            speak_tags "$TAGS" "" > /dev/null
+        fi
     fi
     exit 0
 fi
 
-# --- Stop / Notification / PermissionRequest (on-complete mode) ---
-
+# --- Stop (on-complete): speak all enabled tags in order ---
 RESPONSE=$(echo "$INPUT" | python3 -c "
 import sys, json
 data = json.load(sys.stdin)
@@ -197,36 +243,26 @@ msg = data.get('message', '') or data.get('title', '') or data.get('last_assista
 print(msg[:5000])
 " 2>/dev/null || echo "")
 
-TTS_OUTPUT=$(extract_tts_from_text "$RESPONSE")
-TTS_TEXT="${TTS_OUTPUT%%|||*}"
-TTS_MOOD="${TTS_OUTPUT##*|||}"
+TAGS=$(extract_tags_from_text "$RESPONSE")
 
-# If not found, try transcript (fixes multi-tool-call turns)
-if [ -z "$TTS_TEXT" ] && [ "$HOOK_EVENT" = "Stop" ]; then
+# Transcript fallback for multi-tool-call turns
+if [ -z "$TAGS" ] && [ "$HOOK_EVENT" = "Stop" ]; then
     TRANSCRIPT_PATH=$(echo "$INPUT" | python3 -c "import sys,json; print(json.load(sys.stdin).get('transcript_path',''))" 2>/dev/null || echo "")
     if [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ]; then
-        TTS_OUTPUT=$(extract_tts_from_transcript "$TRANSCRIPT_PATH")
-        TTS_TEXT="${TTS_OUTPUT%%|||*}"
-        TTS_MOOD="${TTS_OUTPUT##*|||}"
-        if [ -n "$TTS_TEXT" ]; then
-            echo "$(date): TTS found via transcript fallback" >> "$LOGFILE"
-        fi
+        TAGS=$(extract_tags_from_transcript "$TRANSCRIPT_PATH")
+        [ -n "$TAGS" ] && echo "$(date): TTS found via transcript fallback" >> "$LOGFILE"
     fi
 fi
 
-echo "$(date): tts_text=${TTS_TEXT:0:80}..." >> "$LOGFILE"
-
-if [ -z "$TTS_TEXT" ]; then
-    echo "$(date): No <tts> tag found, playing random alert" >> "$LOGFILE"
+if [ -z "$TAGS" ]; then
+    echo "$(date): No <tts> tags found, playing random alert" >> "$LOGFILE"
     curl -s -X POST "$CORTANA_TTS_SERVER/alert" \
-        --connect-timeout 2 \
-        --max-time 10 \
+        --connect-timeout 2 --max-time 10 \
         >> "$LOGFILE" 2>&1 &
     exit 0
 fi
 
-echo -n "$TTS_TEXT" | md5_hash > "$TTS_LAST_HASH"
-fire_tts "$TTS_TEXT" "$TTS_MOOD"
-
+echo -n "$TAGS" | md5_hash > "$TTS_LAST_HASH"
+speak_tags "$TAGS" "" > /dev/null
 rm -f "$TTS_PLAYED_FLAG"
 exit 0

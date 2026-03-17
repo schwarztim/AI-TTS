@@ -53,6 +53,14 @@ class MuteRequest(BaseModel):
     muted: bool
 
 
+class ConfigRequest(BaseModel):
+    personality: Optional[str] = None
+    confirm: Optional[str] = None    # "on" | "off"
+    updates: Optional[str] = None    # "on" | "off"
+    end: Optional[str] = None        # "on" | "off"
+    verbosity: Optional[str] = None  # "normal" | "verbose"
+
+
 TOOL_MOOD = {
     "Glob": "search",
     "Grep": "search",
@@ -272,6 +280,39 @@ def create_app(custom_lifespan=None) -> FastAPI:
         app.state.pipeline.tts.voice = req.voice
         app.state.alert_cache.switch_voice(req.voice)
         return {"voice": req.voice}
+
+    @app.get("/config")
+    def get_config():
+        config_dir = Path.home() / ".config" / "cortana-tts"
+        def rf(name, default):
+            p = config_dir / name
+            return p.read_text().strip() if p.exists() else default
+        return {
+            "personality": rf("tts_personality", "ara"),
+            "confirm": rf("messaging_confirm", "off"),
+            "updates": rf("messaging_updates", "on"),
+            "end": rf("messaging_end", "on"),
+            "verbosity": rf("tts_mode", "normal"),
+        }
+
+    @app.post("/config")
+    def set_config(req: ConfigRequest):
+        config_dir = Path.home() / ".config" / "cortana-tts"
+        config_dir.mkdir(parents=True, exist_ok=True)
+        mapping = {
+            "personality": "tts_personality",
+            "confirm": "messaging_confirm",
+            "updates": "messaging_updates",
+            "end": "messaging_end",
+            "verbosity": "tts_mode",
+        }
+        updated = {}
+        for field, filename in mapping.items():
+            value = getattr(req, field, None)
+            if value is not None:
+                (config_dir / filename).write_text(value)
+                updated[field] = value
+        return {"ok": True, "updated": updated}
 
     @app.post("/voice-cue-mode")
     def set_voice_cue_mode(req: VoiceCueModeRequest):
