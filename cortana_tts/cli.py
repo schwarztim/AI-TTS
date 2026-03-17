@@ -488,6 +488,39 @@ def install_claude():
 
     settings_path.write_text(json.dumps(settings, indent=2))
     click.echo(f"Updated: {settings_path}")
+
+    # Add TTS instructions to CLAUDE.md so Claude knows to generate <tts> tags
+    claude_md_path = Path.home() / ".claude" / "CLAUDE.md"
+    tts_marker = "## cortana-tts Voice Output"
+    tts_instructions = f"""
+{tts_marker}
+
+Every response MUST include a hidden `<tts>` tag with a natural spoken summary.
+
+Format — wrap in HTML comment so it stays invisible in terminal:
+```
+<!-- <tts>spoken summary here</tts> -->
+<!-- <tts mood="error">something went wrong</tts> -->
+```
+
+Rules for TTS content:
+- Speak like a human — natural, conversational, not robotic
+- Summarize what was done and the outcome. Don't read out code, file paths, or technical details
+- If you have questions for the user, ask them naturally in the spoken summary
+- Keep it concise — 1-3 sentences for simple tasks, more for complex ones
+- Valid moods: `error`, `success`, `warn` (omit for default)
+- The `<!-- -->` wrapper is mandatory — without it the text renders visibly in terminal
+- TTS and terminal text are separate channels — don't repeat what's in the TTS tag in your visible response
+"""
+
+    existing_md = claude_md_path.read_text() if claude_md_path.exists() else ""
+    if tts_marker not in existing_md:
+        with open(claude_md_path, "a") as f:
+            f.write(tts_instructions)
+        click.echo(f"Added TTS instructions to: {claude_md_path}")
+    else:
+        click.echo(f"TTS instructions already in: {claude_md_path}")
+
     click.echo("Claude Code hooks installed. Restart Claude Code to activate.")
 
 
