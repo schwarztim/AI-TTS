@@ -36,30 +36,39 @@ def _voice_cache_dir() -> Path:
     return base
 
 
-def _parse_voice_name(voice: str) -> tuple[str, str, str]:
-    """Parse 'en_US-lessac-medium' → (lang_code='en_US', voice_name='en_US-lessac', quality='medium')."""
+def _parse_voice_name(voice: str) -> tuple[str, str, str, str]:
+    """Parse 'en_US-hfc_female-medium' → (lang='en', locale='en_US', name='hfc_female', quality='medium').
+
+    HuggingFace path: en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx
+    """
     parts = voice.rsplit("-", 1)
     if len(parts) != 2:
-        raise ValueError(f"Cannot parse piper voice name: {voice!r}. Expected format: lang_name-quality")
-    voice_name, quality = parts
-    lang_code = voice_name.split("-")[0]
-    return lang_code, voice_name, quality
+        raise ValueError(f"Cannot parse piper voice name: {voice!r}. Expected format: locale-name-quality")
+    voice_prefix, quality = parts
+    # voice_prefix is e.g. "en_US-hfc_female" or "en_US-lessac"
+    locale = voice_prefix.split("-")[0]  # en_US
+    lang = locale.split("_")[0]  # en
+    name = voice_prefix.split("-", 1)[1]  # hfc_female, lessac, etc.
+    return lang, locale, name, quality
 
 
 def _model_paths(voice: str) -> tuple[Path, Path]:
     """Return (onnx_path, json_path) for a voice, downloading if needed."""
     cache = _voice_cache_dir()
-    lang_code, voice_name, quality = _parse_voice_name(voice)
+    lang, locale, name, quality = _parse_voice_name(voice)
 
-    onnx_path = cache / f"{voice_name}.{quality}.onnx"
-    json_path = cache / f"{voice_name}.{quality}.onnx.json"
+    # Filename: en_US-hfc_female-medium.onnx
+    filename = f"{locale}-{name}-{quality}"
+    onnx_path = cache / f"{filename}.onnx"
+    json_path = cache / f"{filename}.onnx.json"
 
     if onnx_path.exists() and json_path.exists():
         return onnx_path, json_path
 
-    base_url = f"{_HF_BASE}/{lang_code}/{voice_name}/{quality}"
-    onnx_url = f"{base_url}/{voice_name}.{quality}.onnx"
-    json_url = f"{base_url}/{voice_name}.{quality}.onnx.json"
+    # HF path: en/en_US/hfc_female/medium/en_US-hfc_female-medium.onnx
+    base_url = f"{_HF_BASE}/{lang}/{locale}/{name}/{quality}"
+    onnx_url = f"{base_url}/{filename}.onnx"
+    json_url = f"{base_url}/{filename}.onnx.json"
 
     logger.info("Downloading piper voice model: %s", voice)
 
