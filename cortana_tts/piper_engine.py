@@ -191,18 +191,13 @@ class PiperEngine:
         # Preferred: synthesize_stream_raw (yields raw bytes per sentence)
         if hasattr(voice, "synthesize_stream_raw"):
             return b"".join(voice.synthesize_stream_raw(text))
-        # Fallback: synthesize() writes to a wave.Wave_write file object
-        import io
-        import wave
-        buf = io.BytesIO()
-        with wave.open(buf, "wb") as wf:
-            wf.setnchannels(1)
-            wf.setsampwidth(2)  # 16-bit
-            wf.setframerate(SAMPLE_RATE)
-            voice.synthesize(text, wf)
-        buf.seek(0)
-        with wave.open(buf, "rb") as wf:
-            return wf.readframes(wf.getnframes())
+        # Fallback: synthesize() returns Iterable[AudioChunk] with .audio_float_array
+        chunks = list(voice.synthesize(text))
+        if not chunks:
+            return b""
+        audio_float = np.concatenate([c.audio_float_array for c in chunks])
+        audio_int16 = np.clip(audio_float * 32767, -32768, 32767).astype(np.int16)
+        return audio_int16.tobytes()
 
     def _split_text(self, text: str) -> list[str]:
         """Split text into sentence-level chunks for streaming."""
