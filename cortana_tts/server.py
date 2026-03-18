@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import platform
 import time
 
 logger = logging.getLogger(__name__)
@@ -100,11 +101,15 @@ audio_broadcaster = StatusBroadcaster()
 
 
 def _get_env_path() -> Path:
-    """Resolve .env path: CORTANA_TTS_CONFIG env var → ~/.config/cortana-tts/.env"""
+    """Resolve .env path: CORTANA_TTS_CONFIG env var → platform config dir/.env"""
     env_override = os.environ.get("CORTANA_TTS_CONFIG")
     if env_override:
         return Path(env_override)
-    return Path.home() / ".config" / "cortana-tts" / ".env"
+    if platform.system() == "Windows":
+        base = Path(os.environ.get("APPDATA", Path.home() / "AppData" / "Roaming"))
+    else:
+        base = Path(os.environ.get("XDG_CONFIG_HOME", Path.home() / ".config"))
+    return base / "cortana-tts" / ".env"
 
 
 def create_pipeline() -> tuple[SpeakPipeline, AlertCache]:

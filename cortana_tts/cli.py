@@ -122,7 +122,7 @@ def _model_cached() -> bool:
     if hf_cache.exists() and any(hf_cache.glob("models--hexgrad*")):
         return True
     # Check lightweight (piper voices)
-    piper_cache = Path.home() / ".config" / "cortana-tts" / "piper-voices"
+    piper_cache = _config_dir() / "piper-voices"
     if piper_cache.exists() and any(piper_cache.glob("*.onnx")):
         return True
     # Check if engine preference was already saved (user ran wizard before)
