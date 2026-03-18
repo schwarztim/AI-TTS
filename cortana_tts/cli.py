@@ -612,6 +612,16 @@ def _install_copilot_unix():
         click.echo(f"Source not found: {src}", err=True)
         sys.exit(1)
 
+    # Install watcher.py alongside the shell snippet
+    watcher_src = _integration_path("copilot/watcher.py")
+    watcher_dest = _config_dir() / "copilot-watcher.py"
+    if watcher_src.exists():
+        watcher_dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(watcher_src, watcher_dest)
+        click.echo(f"Installed watcher: {watcher_dest}")
+    else:
+        click.echo(f"Warning: watcher not found: {watcher_src}", err=True)
+
     # Write snippet to a dedicated file so it never ends up after an early
     # `return` or inside a conditional block in ~/.zshrc / ~/.bashrc.
     dest = _config_dir() / "copilot.sh"
@@ -670,6 +680,39 @@ def _install_copilot_unix():
     else:
         click.echo(f"Snippet written to: {dest}")
         click.echo("Reload your shell or run: source ~/.zshrc")
+
+    # Add TTS instructions to ~/.copilot/instructions.md
+    copilot_md = Path.home() / ".copilot" / "instructions.md"
+    tts_marker = "## cortana-tts Voice Output"
+    tts_block = f"""
+{tts_marker}
+
+Every response MUST include a hidden `<tts>` tag with a natural spoken summary.
+
+Format — wrap in HTML comment so it stays invisible in terminal:
+```
+<!-- <tts>spoken summary here</tts> -->
+<!-- <tts mood="error">something went wrong</tts> -->
+```
+
+Rules for TTS content:
+- Speak like a human — natural, conversational, not robotic
+- Summarize what was done and the outcome. Don't read out code, file paths, or technical details
+- If you have questions for the user, ask them naturally in the spoken summary
+- Keep it concise — 1-3 sentences for simple tasks, more for complex ones
+- Valid moods: `error`, `success`, `warn` (omit for default)
+- The `<!-- -->` wrapper is mandatory — without it the text renders visibly in terminal
+- TTS and terminal text are separate channels — don't repeat what's in the TTS tag in your visible response
+"""
+
+    existing_md = copilot_md.read_text() if copilot_md.exists() else ""
+    if tts_marker not in existing_md:
+        copilot_md.parent.mkdir(parents=True, exist_ok=True)
+        with open(copilot_md, "a") as f:
+            f.write(tts_block)
+        click.echo(f"Added TTS instructions to: {copilot_md}")
+    else:
+        click.echo(f"TTS instructions already in: {copilot_md}")
 
 
 def _install_copilot_windows():
