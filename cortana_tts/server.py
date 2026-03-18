@@ -16,7 +16,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 
-from cortana_tts.tts_engine import TTSEngine
 from cortana_tts.audio_player import AudioPlayer
 from cortana_tts.pipeline import SpeakPipeline
 from cortana_tts.alert_cache import AlertCache, SAMPLE_RATE
@@ -125,6 +124,7 @@ def create_pipeline() -> tuple[SpeakPipeline, AlertCache]:
         engine = PiperEngine(voice=piper_voice, speed=speed)
         logger.info("Using PiperEngine (lightweight), voice=%s", piper_voice)
     else:
+        from cortana_tts.tts_engine import TTSEngine
         voice = os.getenv("TTS_VOICE", "af_heart")
         engine = TTSEngine(voice=voice, speed=speed)
         logger.info("Using TTSEngine (standard), voice=%s", voice)
