@@ -25,7 +25,7 @@ from pathlib import Path
 SESSION_DIR = Path.home() / ".copilot" / "session-state"
 DETECT_TIMEOUT = 30  # seconds to wait for a new session
 IDLE_TIMEOUT = 60    # seconds of no file activity before self-exit
-TTS_TAG_RE = re.compile(r"<!--\s*<tts(?:\s[^>]*)?>(.+?)</tts>\s*-->", re.DOTALL)
+TTS_TAG_RE = re.compile(r'<!--\s*<tts(?:\s+mood="([^"]*)")?\s*>(.+?)</tts>\s*-->', re.DOTALL)
 LOG_PATH = Path.home() / "Library" / "Logs" / "cortana-tts-copilot.log"
 
 # ---------------------------------------------------------------------------
@@ -67,15 +67,22 @@ def _post_json(url: str, data: dict):
         _log(f"POST {url} failed: {e}")
 
 
-def _extract_tts(content: str) -> str | None:
-    """Extract text from <tts> tags, falling back to raw content (capped)."""
+def _extract_tts(content: str) -> tuple[str, str | None] | None:
+    """Extract text and mood from <tts> tags, falling back to raw content (capped).
+
+    Returns (text, mood) or None.
+    """
     m = TTS_TAG_RE.search(content)
     if m:
-        return m.group(1).strip()
+        mood = m.group(1) or None  # group 1 = mood attribute
+        text = m.group(2).strip()  # group 2 = tag content
+        if text:
+            return text, mood
+        return None
     # Fallback: speak raw content, capped at 500 chars
     text = content.strip()
     if text:
-        return text[:500]
+        return text[:500], None
     return None
 
 
@@ -211,6 +218,18 @@ def main():
         if not new_data:
             return False
 
+        # Guard against partial line reads: if data doesn't end with newline,
+        # rewind past the incomplete trailing fragment so it's re-read next time.
+        if not new_data.endswith("\n"):
+            last_nl = new_data.rfind("\n")
+            if last_nl == -1:
+                # Entire read is a partial line — rewind everything
+                file_pos -= len(new_data.encode("utf-8"))
+                return False
+            partial = new_data[last_nl + 1:]
+            file_pos -= len(partial.encode("utf-8"))
+            new_data = new_data[: last_nl + 1]
+
         for line in new_data.strip().splitlines():
             line = line.strip()
             if not line:
@@ -234,9 +253,13 @@ def main():
                     spoken_ids.add(msg_id)
 
                 content = event.get("data", {}).get("content", "")
-                text = _extract_tts(content)
-                if text:
-                    _post_json(f"{tts_url}/speak", {"text": text})
+                result = _extract_tts(content)
+                if result:
+                    text, mood = result
+                    payload = {"text": text}
+                    if mood:
+                        payload["mood"] = mood
+                    _post_json(f"{tts_url}/speak", payload)
                     _log(f"Spoke: {text[:80]}...")
 
             elif etype == "assistant.turn_end":

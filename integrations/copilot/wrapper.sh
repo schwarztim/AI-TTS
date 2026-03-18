@@ -25,12 +25,14 @@ ghc() {
 
   if [ -n "$output" ] && [ $exit_code -eq 0 ]; then
     local json_text
-    json_text=$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))')
-    curl -s -X POST "$CORTANA_TTS_URL/speak" \
-      -H "Content-Type: application/json" \
-      -d "{\"text\": $json_text}" \
-      --connect-timeout 2 \
-      --max-time 30 >/dev/null 2>&1 &
+    if json_text=$(printf '%s' "$output" | python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))' 2>/dev/null) && [ -n "$json_text" ]; then
+      curl -s -X POST "$CORTANA_TTS_URL/speak" \
+        -H "Content-Type: application/json" \
+        -d "{\"text\": $json_text}" \
+        --connect-timeout 2 \
+        --max-time 30 >/dev/null 2>&1 &
+      disown 2>/dev/null
+    fi
   fi
 
   return $exit_code
