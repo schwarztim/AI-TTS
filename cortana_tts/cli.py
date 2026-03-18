@@ -297,14 +297,16 @@ def cmd_start(port: int, voice: str | None, bg: bool):
         log_path = log_dir / "server.log"
 
         if platform.system() == "Windows":
-            # On Windows, use pythonw or shell redirect for true detach
-            cmd = f'"{sys.executable}" -m cortana_tts.server >> "{log_path}" 2>&1'
+            # Use pythonw.exe for windowless background on Windows
+            pythonw = Path(sys.executable).parent / "pythonw.exe"
+            python_exe = str(pythonw) if pythonw.exists() else sys.executable
+            log_f = open(log_path, "a")
             proc = subprocess.Popen(
-                cmd,
+                [python_exe, "-m", "cortana_tts.server"],
                 env=env,
-                shell=True,
-                creationflags=subprocess.DETACHED_PROCESS | subprocess.CREATE_NO_WINDOW,
-                close_fds=True,
+                stdout=log_f,
+                stderr=log_f,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW,
             )
         else:
             log_f = open(log_path, "a")
