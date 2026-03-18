@@ -296,14 +296,19 @@ def cmd_start(port: int, voice: str | None, bg: bool):
         log_dir.mkdir(parents=True, exist_ok=True)
         log_path = log_dir / "server.log"
 
-        with open(log_path, "a") as log_f:
-            proc = subprocess.Popen(
-                [sys.executable, "-m", "cortana_tts.server"],
-                env=env,
-                stdout=log_f,
-                stderr=log_f,
-                start_new_session=True,
-            )
+        log_f = open(log_path, "a")
+        creation_flags = 0
+        if platform.system() == "Windows":
+            creation_flags = subprocess.CREATE_NO_WINDOW
+        proc = subprocess.Popen(
+            [sys.executable, "-m", "cortana_tts.server"],
+            env=env,
+            stdout=log_f,
+            stderr=log_f,
+            start_new_session=True,
+            creationflags=creation_flags,
+        )
+        # NOTE: log_f intentionally not closed — child process owns the fd
         pid_path.write_text(str(proc.pid))
         click.echo(f"cortana-tts server started in background (PID {proc.pid}, port {port})")
         click.echo(f"Log: {log_path}")
