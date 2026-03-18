@@ -271,9 +271,9 @@ def _run_setup_wizard_standard(voice: str):
 
 @main.command("start")
 @click.option("--port", default=5111, show_default=True, help="Port to listen on.")
-@click.option("--voice", default="af_heart", show_default=True, help="Voice to use.")
+@click.option("--voice", default=None, help="Voice to use (default: from config).")
 @click.option("--bg", is_flag=True, default=False, help="Start server in background.")
-def cmd_start(port: int, voice: str, bg: bool):
+def cmd_start(port: int, voice: str | None, bg: bool):
     """Start the cortana-tts server."""
     if _is_running():
         click.echo("cortana-tts server is already running.")
@@ -281,11 +281,12 @@ def cmd_start(port: int, voice: str, bg: bool):
 
     # First-run: model not yet downloaded
     if not _model_cached():
-        _run_setup_wizard(voice)
+        _run_setup_wizard(voice or "af_heart")
 
     env = os.environ.copy()
     env["TTS_PORT"] = str(port)
-    env["TTS_VOICE"] = voice
+    if voice is not None:
+        env["TTS_VOICE"] = voice
 
     if bg:
         pid_path = _pid_file()
