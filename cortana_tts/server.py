@@ -295,7 +295,7 @@ def create_app(custom_lifespan=None) -> FastAPI:
         return {
             "personality": rf("tts_personality", "ara"),
             "confirm": rf("messaging_confirm", "off"),
-            "updates": rf("messaging_updates", "on"),
+            "updates": rf("messaging_updates", "off"),
             "end": rf("messaging_end", "on"),
             "verbosity": rf("tts_mode", "normal"),
         }

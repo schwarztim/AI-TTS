@@ -41,7 +41,7 @@ case "$HOOK_EVENT" in
         echo "tts_verbosity=$(rc tts_mode normal)"
         echo "tts_personality=$(rc tts_personality ara)"
         echo "tts_confirm=$(rc messaging_confirm off)"
-        echo "tts_updates=$(rc messaging_updates on)"
+        echo "tts_updates=$(rc messaging_updates off)"
         echo "tts_end=$(rc messaging_end on)"
         curl -s -X POST "$CORTANA_TTS_SERVER/status" \
             -H "Content-Type: application/json" \

@@ -1044,7 +1044,7 @@ def personality_set(name: str):
 MESSAGING_TYPES = {
     "confirm": ("messaging_confirm", "off",
                 "Speak before tool use — announces what Claude is about to do"),
-    "updates": ("messaging_updates", "on",
+    "updates": ("messaging_updates", "off",
                 "Speak mid-response status/error updates"),
     "end":     ("messaging_end", "on",
                 "Speak final summary with recap and follow-up questions"),
@@ -1098,7 +1098,7 @@ def messaging_preset(name: str):
     """
     presets = {
         "minimal": {"messaging_confirm": "off", "messaging_updates": "off", "messaging_end": "on"},
-        "normal":  {"messaging_confirm": "off", "messaging_updates": "on",  "messaging_end": "on"},
+        "normal":  {"messaging_confirm": "off", "messaging_updates": "off", "messaging_end": "on"},
         "full":    {"messaging_confirm": "on",  "messaging_updates": "on",  "messaging_end": "on"},
     }
     for filename, value in presets[name].items():

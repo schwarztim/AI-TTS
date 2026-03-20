@@ -30,7 +30,7 @@ type_enabled() {
     local type="$1"
     case "$type" in
         confirm)  [ "$(read_config messaging_confirm off)" = "on" ] ;;
-        update)   [ "$(read_config messaging_updates on)" = "on" ] ;;
+        update)   [ "$(read_config messaging_updates off)" = "on" ] ;;
         end|*)    [ "$(read_config messaging_end on)" = "on" ] ;;
     esac
 }
