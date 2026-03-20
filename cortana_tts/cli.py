@@ -499,13 +499,18 @@ def install_claude():
         notify_cmd = str(hooks_dst / "notify.sh")
         status_cmd = str(hooks_dst / "status.sh")
 
+    def _normalize_cmd(cmd: str) -> str:
+        """Expand ~ so we can compare absolute vs tilde paths."""
+        return str(Path(cmd).expanduser())
+
     def _ensure_hook(event: str, cmd: str):
         event_hooks = hooks.setdefault(event, [])
+        norm_cmd = _normalize_cmd(cmd)
         # Claude Code format: {"matcher": "", "hooks": [{"type": "command", "command": "..."}]}
         for entry in event_hooks:
             if isinstance(entry, dict):
                 for h in entry.get("hooks", []):
-                    if isinstance(h, dict) and h.get("command") == cmd:
+                    if isinstance(h, dict) and _normalize_cmd(h.get("command", "")) == norm_cmd:
                         return
         event_hooks.append({"matcher": "", "hooks": [{"type": "command", "command": cmd}]})
 
