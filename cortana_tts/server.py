@@ -149,7 +149,7 @@ async def lifespan(app: FastAPI):
     app.state.audio_broadcaster = audio_broadcaster
     pipeline.audio_broadcaster = audio_broadcaster
     alert_cache.warm()
-    app.state.voice_cue_mode = "30s"
+    app.state.voice_cue_mode = "off"
     app.state.playback_mode = "chunked"
     app.state.last_cue_time = 0.0
     app.state.cue_fired_this_cycle = False
