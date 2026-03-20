@@ -91,6 +91,10 @@ with open(sys.argv[1]) as f:
                 if not is_tool_result:
                     last_user_prompt_idx = len(entries) - 1
 
+if last_user_prompt_idx == -1:
+    # No user prompt found (e.g. forked session) — only check last assistant message
+    last_user_prompt_idx = max(len(entries) - 2, 0)
+
 pattern = r'(?:<!--\s*)?<tts([^>]*)>(.*?)</tts>(?:\s*-->)?'
 for obj in entries[last_user_prompt_idx + 1:]:
     msg = obj.get('message', {})
