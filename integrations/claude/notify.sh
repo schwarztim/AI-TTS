@@ -91,16 +91,17 @@ with open(sys.argv[1]) as f:
                 if not is_tool_result:
                     last_user_prompt_idx = len(entries) - 1
 
-if last_user_prompt_idx == -1:
-    # No user prompt found (e.g. forked session) — only check last assistant message
-    last_user_prompt_idx = max(len(entries) - 2, 0)
+# Only extract from the LAST assistant message to avoid replaying old turns
+last_assistant = None
+for obj in reversed(entries):
+    msg = obj.get('message', {})
+    if isinstance(msg, dict) and msg.get('role') == 'assistant':
+        last_assistant = msg
+        break
 
 pattern = r'(?:<!--\s*)?<tts([^>]*)>(.*?)</tts>(?:\s*-->)?'
-for obj in entries[last_user_prompt_idx + 1:]:
-    msg = obj.get('message', {})
-    if not isinstance(msg, dict) or msg.get('role') != 'assistant':
-        continue
-    for block in (msg.get('content', []) or []):
+if last_assistant:
+    for block in (last_assistant.get('content', []) or []):
         if isinstance(block, dict) and block.get('type') == 'text':
             text = block.get('text', '')
             for m in re.finditer(pattern, text, re.DOTALL):
